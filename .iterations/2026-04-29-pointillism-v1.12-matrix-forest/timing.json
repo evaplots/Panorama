@@ -1,0 +1,203 @@
+{
+  "version": "v1.12-matrix-forest",
+  "runAt": "2026-04-29T15:45:41.641Z",
+  "resolution": {
+    "width": 4961,
+    "height": 3508,
+    "megapixels": 17.4
+  },
+  "nodeVersion": "v24.15.0",
+  "platform": "win32",
+  "scenes": [
+    {
+      "scene": "forest-noon__munch-sunset",
+      "palette": "Munch — sunset / anxious",
+      "paletteRef": "Edvard Munch, sunset and twilight works",
+      "timing": {
+        "readImageDataMs": 29.7,
+        "paletteMs": 0.7,
+        "underpaintMs": 14.8,
+        "grayscaleMs": 48.2,
+        "gradientMs": 1712.7,
+        "strokesMs": 19713,
+        "totalMs": 21519.2,
+        "strokeCount": 522095,
+        "paletteSize": 48,
+        "brushThicknessPx": 14,
+        "megapixels": 17.4,
+        "projectedA3Ms": 21519
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v1.12-matrix-forest\\forest-noon__munch-sunset-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v1.12-matrix-forest\\forest-noon__munch-sunset-pointillism.png"
+    },
+    {
+      "scene": "forest-noon__kirchner-alpine",
+      "palette": "Kirchner — alpine cool",
+      "paletteRef": "Ernst Ludwig Kirchner, Davos and Swiss alpine paintings",
+      "timing": {
+        "readImageDataMs": 24.9,
+        "paletteMs": 0.1,
+        "underpaintMs": 13.1,
+        "grayscaleMs": 42.4,
+        "gradientMs": 1671.3,
+        "strokesMs": 19560,
+        "totalMs": 21311.8,
+        "strokeCount": 522095,
+        "paletteSize": 48,
+        "brushThicknessPx": 14,
+        "megapixels": 17.4,
+        "projectedA3Ms": 21312
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v1.12-matrix-forest\\forest-noon__kirchner-alpine-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v1.12-matrix-forest\\forest-noon__kirchner-alpine-pointillism.png"
+    },
+    {
+      "scene": "forest-noon__soutine-landscape",
+      "palette": "Soutine — distorted landscape",
+      "paletteRef": "Chaïm Soutine, Céret and Cagnes landscapes",
+      "timing": {
+        "readImageDataMs": 21.9,
+        "paletteMs": 0.1,
+        "underpaintMs": 13.1,
+        "grayscaleMs": 41,
+        "gradientMs": 2066.3,
+        "strokesMs": 21363.3,
+        "totalMs": 23505.6,
+        "strokeCount": 522095,
+        "paletteSize": 48,
+        "brushThicknessPx": 14,
+        "megapixels": 17.4,
+        "projectedA3Ms": 23506
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v1.12-matrix-forest\\forest-noon__soutine-landscape-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v1.12-matrix-forest\\forest-noon__soutine-landscape-pointillism.png"
+    },
+    {
+      "scene": "forest-noon__whistler-nocturne",
+      "palette": "Whistler — nocturne",
+      "paletteRef": "James McNeill Whistler, Nocturnes (Battersea Bridge, Black and Gold, Blue and Silver)",
+      "timing": {
+        "readImageDataMs": 31.2,
+        "paletteMs": 0.1,
+        "underpaintMs": 13.1,
+        "grayscaleMs": 42.4,
+        "gradientMs": 1712.9,
+        "strokesMs": 19668.1,
+        "totalMs": 21467.7,
+        "strokeCount": 522095,
+        "paletteSize": 48,
+        "brushThicknessPx": 14,
+        "megapixels": 17.4,
+        "projectedA3Ms": 21468
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v1.12-matrix-forest\\forest-noon__whistler-nocturne-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v1.12-matrix-forest\\forest-noon__whistler-nocturne-pointillism.png"
+    },
+    {
+      "scene": "forest-noon__turner-fog",
+      "palette": "Turner — fog and atmosphere",
+      "paletteRef": "J.M.W. Turner, late seascapes and Norham Castle",
+      "timing": {
+        "readImageDataMs": 21.2,
+        "paletteMs": 0.3,
+        "underpaintMs": 14.5,
+        "grayscaleMs": 40.8,
+        "gradientMs": 1728.1,
+        "strokesMs": 19837.5,
+        "totalMs": 21642.4,
+        "strokeCount": 522095,
+        "paletteSize": 48,
+        "brushThicknessPx": 14,
+        "megapixels": 17.4,
+        "projectedA3Ms": 21642
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v1.12-matrix-forest\\forest-noon__turner-fog-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v1.12-matrix-forest\\forest-noon__turner-fog-pointillism.png"
+    },
+    {
+      "scene": "forest-noon__marc-symbolic",
+      "palette": "Marc — symbolic primary",
+      "paletteRef": "Franz Marc (Der Blaue Reiter), Yellow Cow / Blue Horses / Tower of Blue Horses",
+      "timing": {
+        "readImageDataMs": 27.3,
+        "paletteMs": 0.1,
+        "underpaintMs": 14.5,
+        "grayscaleMs": 44.9,
+        "gradientMs": 1700.3,
+        "strokesMs": 19725,
+        "totalMs": 21512.3,
+        "strokeCount": 522095,
+        "paletteSize": 48,
+        "brushThicknessPx": 14,
+        "megapixels": 17.4,
+        "projectedA3Ms": 21512
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v1.12-matrix-forest\\forest-noon__marc-symbolic-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v1.12-matrix-forest\\forest-noon__marc-symbolic-pointillism.png"
+    },
+    {
+      "scene": "forest-noon__nolde-storm",
+      "palette": "Nolde — storm and unsettled sea",
+      "paletteRef": "Emil Nolde, North Sea seascapes and storm paintings",
+      "timing": {
+        "readImageDataMs": 26.3,
+        "paletteMs": 0.1,
+        "underpaintMs": 14.6,
+        "grayscaleMs": 48.1,
+        "gradientMs": 1660.3,
+        "strokesMs": 19780.3,
+        "totalMs": 21529.7,
+        "strokeCount": 522095,
+        "paletteSize": 48,
+        "brushThicknessPx": 14,
+        "megapixels": 17.4,
+        "projectedA3Ms": 21530
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v1.12-matrix-forest\\forest-noon__nolde-storm-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v1.12-matrix-forest\\forest-noon__nolde-storm-pointillism.png"
+    },
+    {
+      "scene": "forest-noon__klimt-golden",
+      "palette": "Klimt — golden / ornamental",
+      "paletteRef": "Gustav Klimt, golden phase (The Kiss, Beethoven Frieze, Adele Bloch-Bauer)",
+      "timing": {
+        "readImageDataMs": 23.1,
+        "paletteMs": 0.1,
+        "underpaintMs": 13.1,
+        "grayscaleMs": 43.3,
+        "gradientMs": 1677.3,
+        "strokesMs": 19818.4,
+        "totalMs": 21575.3,
+        "strokeCount": 522095,
+        "paletteSize": 48,
+        "brushThicknessPx": 14,
+        "megapixels": 17.4,
+        "projectedA3Ms": 21575
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v1.12-matrix-forest\\forest-noon__klimt-golden-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v1.12-matrix-forest\\forest-noon__klimt-golden-pointillism.png"
+    },
+    {
+      "scene": "forest-noon__macke-tunisian",
+      "palette": "Macke — Tunisian sun",
+      "paletteRef": "August Macke, Tunisian watercolours (1914)",
+      "timing": {
+        "readImageDataMs": 26.2,
+        "paletteMs": 0.1,
+        "underpaintMs": 13.5,
+        "grayscaleMs": 41.8,
+        "gradientMs": 1773.1,
+        "strokesMs": 20109.3,
+        "totalMs": 21964.1,
+        "strokeCount": 522095,
+        "paletteSize": 48,
+        "brushThicknessPx": 14,
+        "megapixels": 17.4,
+        "projectedA3Ms": 21964
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v1.12-matrix-forest\\forest-noon__macke-tunisian-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v1.12-matrix-forest\\forest-noon__macke-tunisian-pointillism.png"
+    }
+  ],
+  "averageTotalMs": 21781
+}
