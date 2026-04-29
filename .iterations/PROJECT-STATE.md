@@ -5,7 +5,7 @@
 > session notes (`session-YYYYMMDD-HHMM.md`) remain the cycle-by-cycle log;
 > this file is the running summary.
 
-Last updated: 2026-04-29 08:09 (cycle 9 close).
+Last updated: 2026-04-29 (cycle 34 close — through v1.12 matrix, exhibition bundle, LICENSE, RELEASE-NOTES).
 
 ---
 
@@ -146,60 +146,80 @@ node scripts/pointillism-test.js <version> [compare] [flags...]
 | v1.3-expressionist  | 39.6 s   | Curated × 7 palettes in expressionist mode — museum bar reached |
 | best-of gallery     | n/a      | 3×2 A3 composite of strongest outputs across all iterations    |
 | v1.4-mid-stroke     | 22.7 s   | width-mm=1.2 sweet spot — museum-bar AT PASS perf              |
+| v1.5-palette-comp   | 24.5 s   | alpine × 7 palettes at v1.4 settings (true-v1.4 Marc cell)     |
+| v1.6-palette-comp   | 24.7 s   | Klimt + Macke palettes added (set now 9); alpine × 9           |
+| v1.7-new-scenes     | 21.6 s   | urban-dusk + desert-noon scene factories added                  |
+| v1.8 7-scene corp.  | 22.8 s   | full 7-scene v1.4 corpus (urban-dusk → Whistler re-pair)       |
+| v1.9-snow-blizzard  | 20.1 s   | snow-blizzard scene → Turner pairing                            |
+| v1.10-canyon        | 23.1 s   | canyon scene → Marc; SCENES now 9; only Klimt palette-only     |
+| v1.11-manual-raster | 14.6 s   | manual ImageData rasterisation NEGATIVE result (slower than canvas) |
+| v1.12-matrix        | 24-27 s  | 9×9 matrix complete: 81 cells, exhibition/matrix-9x9.png       |
 
 ---
 
-## Project status: exhibition-ready
+## Project status: complete
 
-The 25-cycle Phase 2.5 sprint has produced a complete museum-submission
-bundle. All artifacts are reproducible, deterministic, and archived to
-GitHub. The remaining engineering and curation queue is short and
-optional — none of it is blocking the user's stated goal of museum
-exhibition.
+The 33-cycle Phase 2.5 sprint has produced a complete museum-submission
+bundle plus a closing release. All artifacts are reproducible,
+deterministic, and archived to GitHub. The autonomous queue is genuinely
+empty for substantive deliverables — nothing remaining is blocking the
+user's stated goal of museum exhibition. Cron `0acf8fd4` keeps firing
+maintenance-mode polish at 30-min intervals; can be ended with
+`CronDelete 0acf8fd4` whenever you wish.
 
 **What's shipped:**
-- 9 source-scene types × 9 curated painter palettes (corpus)
-- 4 named gallery layouts (mixed best-of, v1.4 6-cell, v1.4 8-scenes,
-  v1.4 9-scenes, exhibition-six 3×2)
+- 9 source-scene types × 9 curated painter palettes (the full 81-cell
+  corpus rendered)
+- 5 named gallery layouts: best-of-mixed, v1.4-curation (6-cell),
+  v1.4-eight-scenes, v1.4-nine-scenes, exhibition-six (3×2),
+  v1.4-nine-painters (3×3 alpine source × 9 painters)
 - 6-plate `exhibition/` package: print PNGs (12-14 MB each), web JPEGs
-  (~400 KB each), source-and-painted process plates, single contact
-  sheet
-- `EXHIBITION.md` (curator wall labels), `exhibition/PRESS-KIT.md`
-  (journalist summary), `exhibition/README.md` (operational index),
-  `docs/EXHIBITION-CHECKLIST.md` (pre-submission practical checklist)
+  (~400 KB each), source-and-painted process plates, contact sheet
+- **9×9 matrix contact sheet** (`exhibition/matrix-9x9.png`, 33 MB
+  print + 503 KB web JPEG) — every scene × every painter, the project's
+  thoroughness statement
+- Audience-specific docs: `EXHIBITION.md` (curator wall labels),
+  `exhibition/PRESS-KIT.md` (journalist summary), `exhibition/README.md`
+  (operational index), `docs/EXHIBITION-CHECKLIST.md` (pre-submission
+  practical checklist), `RELEASE-NOTES.md` (v1.4 changelog)
+- Licensing: `LICENSE` (MIT, software), `LICENSE-ART.md`
+  (CC BY-NC-SA 4.0, rendered artworks; CC0 1.0 for palette JSON)
 - v1.4 reference-faithful AND v1.4 expressionist modes both shipping
-  PASS-perf museum-bar output (~22 s avg per A3 print)
+  PASS-perf museum-bar output (~22-26 s avg per A3 print)
+- npm script aliases: `npm run pointillism|gallery|matrix|thumbnails|process-plates`
 - Determinism contract intact (mulberry32 seed; same input = same output)
 
 **What's not shipped (intentionally deferred):**
 - Real Three.js render integration (requires browser; outside the
-  autonomous loop's reach)
+  autonomous loop's reach — wired in `ControlsPanel.js` but visual QA
+  needs the user)
 - Phase 3 vegetation, Phase 4 scenic-default, Phase 5 multi-sensory
   (weather/astronomy/wildlife)
 - Floating-buildings investigation (parked; needs user-supplied test
   location/screenshot)
-- Full 9×9 = 81-cell matrix render (queued, optional)
 
 ## Active queue (in order; pick top item that's not blocked)
 
-1. ~~**Manual ImageData ellipse rasterisation perf optim.**~~ ✗ Tried in
-   cycle 20 — ~16% SLOWER than canvas-API (node-canvas's native rasterizer
-   beats pure-JS hit-test for this workload). Implemented behind
-   `--manual-raster` flag as documented opt-in; do not turn on for perf.
-2. **Tighter best-of gallery curation.** v1.3-expressionist outputs uniformly
-   crossed the museum bar. The current best-of-6 mixes modes; a v1.3-only
-   composite might be a stronger pitch. Could rebuild via
-   `scripts/build-gallery.js` with different picks.
-3. ~~**Explore mid-range stroke width.**~~ ✅ Done in cycle 11 — v1.4 at
-   1.2 mm landed museum-bar at PASS perf. Now the recommended expressionist
+1. ~~**Manual ImageData ellipse rasterisation perf optim.**~~ ✗ Cycle 20 —
+   ~16% SLOWER than canvas-API. Behind `--manual-raster` flag; do not
+   enable for perf.
+2. ~~**Tighter best-of gallery curation.**~~ ✅ Cycle 13 — v1.4-curation
+   gallery rebuilt with 100% v1.4 cells (Marc cell promoted from v1.3 to
+   v1.5 in cycle 13).
+3. ~~**Explore mid-range stroke width.**~~ ✅ Cycle 11 — v1.4 at 1.2 mm
+   landed museum-bar at PASS perf. Now the recommended expressionist
    preset.
-4. **More curated palettes.** Klimt golden, Schiele linear, Macke Tunisian,
-   Hokusai snow could round out the emotional registers.
+4. ~~**More curated palettes.**~~ ✅ Cycle 14 — Klimt golden + Macke
+   Tunisian added; palette set now 9 painters.
 5. **Real-render integration.** All current testing is on synthetic canvas
    sources. The real test is on Three.js terrain renders in-browser. The
    "Test pointillism" button in `ControlsPanel.js` is wired and works, but
    the user has to run `npm run dev` and click it — outside the autonomous
-   loop's reach.
+   loop's reach. **Pending user gate.**
+
+The substantive queue is now empty. Future autonomous cycles operate in
+maintenance mode (verify links, regenerate artifacts on source changes,
+small polish if real gaps exist).
 
 ## Parked items (need user input)
 
@@ -234,8 +254,15 @@ exhibition.
 > Produce expressionist landscape paintings worthy of exhibition at a major
 > digital-art museum.
 
-The v1.3-expressionist outputs are the current high-water mark. The default
-v1.2-faithful is the algorithmic baseline that future variants build on.
-Every cycle should either (a) raise the visual bar somewhere, (b) make the
-existing bar reachable faster, or (c) widen the range. Avoid feel-good
-refactors that don't advance one of those.
+The **v1.4-mid-stroke expressionist preset** (`--curated --no-median
+--width-mm=1.2 --brush-stroke=2.0 --density=0.03`) is the current
+recommended default for museum-bar output, at 22-26 s per A3 print.
+The v1.4-faithful pipeline (default DEFAULTS in `Pointillism.js`)
+remains the algorithm-true baseline. Six exhibit plates and the 9×9
+matrix together represent the project's full statement. Every cycle
+should either (a) raise the visual bar somewhere, (b) make the existing
+bar reachable faster, or (c) widen the range. Avoid feel-good refactors
+that don't advance one of those.
+
+For reproducibility from scratch: see `RELEASE-NOTES.md` for the exact
+command sequence to regenerate the entire `exhibition/` bundle.
