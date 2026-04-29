@@ -89,9 +89,9 @@ const GALLERIES = {
         sub: 'v1.4 sweet spot: ultramarine vs cadmium tensions',
       },
       {
-        src: '2026-04-29-pointillism-v1.3-expressionist-comp/alpine-sunset__marc-symbolic-pointillism.png',
+        src: '2026-04-29-pointillism-v1.5-palette-comp/alpine-sunset__marc-symbolic-pointillism.png',
         title: 'Marc — primary symbolism',
-        sub: 'v1.3 carryover: Der Blaue Reiter at 2.0 mm strokes',
+        sub: 'v1.4 settings: structured Der Blaue Reiter primaries',
       },
     ],
   },
