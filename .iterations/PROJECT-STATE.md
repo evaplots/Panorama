@@ -149,6 +149,37 @@ node scripts/pointillism-test.js <version> [compare] [flags...]
 
 ---
 
+## Project status: exhibition-ready
+
+The 25-cycle Phase 2.5 sprint has produced a complete museum-submission
+bundle. All artifacts are reproducible, deterministic, and archived to
+GitHub. The remaining engineering and curation queue is short and
+optional — none of it is blocking the user's stated goal of museum
+exhibition.
+
+**What's shipped:**
+- 9 source-scene types × 9 curated painter palettes (corpus)
+- 4 named gallery layouts (mixed best-of, v1.4 6-cell, v1.4 8-scenes,
+  v1.4 9-scenes, exhibition-six 3×2)
+- 6-plate `exhibition/` package: print PNGs (12-14 MB each), web JPEGs
+  (~400 KB each), source-and-painted process plates, single contact
+  sheet
+- `EXHIBITION.md` (curator wall labels), `exhibition/PRESS-KIT.md`
+  (journalist summary), `exhibition/README.md` (operational index),
+  `docs/EXHIBITION-CHECKLIST.md` (pre-submission practical checklist)
+- v1.4 reference-faithful AND v1.4 expressionist modes both shipping
+  PASS-perf museum-bar output (~22 s avg per A3 print)
+- Determinism contract intact (mulberry32 seed; same input = same output)
+
+**What's not shipped (intentionally deferred):**
+- Real Three.js render integration (requires browser; outside the
+  autonomous loop's reach)
+- Phase 3 vegetation, Phase 4 scenic-default, Phase 5 multi-sensory
+  (weather/astronomy/wildlife)
+- Floating-buildings investigation (parked; needs user-supplied test
+  location/screenshot)
+- Full 9×9 = 81-cell matrix render (queued, optional)
+
 ## Active queue (in order; pick top item that's not blocked)
 
 1. ~~**Manual ImageData ellipse rasterisation perf optim.**~~ ✗ Tried in
