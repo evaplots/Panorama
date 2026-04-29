@@ -182,8 +182,12 @@ async function main() {
   console.log(`Output dir: ${runDir}`);
   console.log(`Resolution: ${A3_W}×${A3_H} (${(A3_W * A3_H / 1e6).toFixed(2)} MP)\n`);
 
-  // v0.5 special mode: ONE source × all palettes (demonstrates palette = signature).
-  const isComparison = VERSION === 'v0.5';
+  // Comparison mode: ONE source × all palettes (demonstrates palette = signature).
+  // Triggered by v0.5 (legacy), or by passing "compare" as the 2nd CLI arg, or by
+  // any version label ending in "-comp".
+  const compareArg = process.argv[3] === 'compare';
+  const isComparison =
+    VERSION === 'v0.5' || VERSION.endsWith('-comp') || compareArg;
   const runs = isComparison
     ? Object.keys(palettes).map(paletteKey => ({
         name: `${COMPARISON_SCENE.name}__${paletteKey}`,
