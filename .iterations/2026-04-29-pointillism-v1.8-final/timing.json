@@ -1,0 +1,161 @@
+{
+  "version": "v1.8-final",
+  "runAt": "2026-04-29T09:45:06.767Z",
+  "resolution": {
+    "width": 4961,
+    "height": 3508,
+    "megapixels": 17.4
+  },
+  "nodeVersion": "v24.15.0",
+  "platform": "win32",
+  "scenes": [
+    {
+      "scene": "alpine-sunset",
+      "palette": "Kirchner — alpine cool",
+      "paletteRef": "Ernst Ludwig Kirchner, Davos and Swiss alpine paintings",
+      "timing": {
+        "readImageDataMs": 21,
+        "paletteMs": 123.7,
+        "underpaintMs": 2717.1,
+        "grayscaleMs": 44.8,
+        "gradientMs": 1723.1,
+        "strokesMs": 22733,
+        "totalMs": 27362.6,
+        "strokeCount": 1044191,
+        "paletteSize": 80,
+        "brushThicknessPx": 8,
+        "megapixels": 17.4,
+        "projectedA3Ms": 27363
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v1.8-final\\alpine-sunset-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v1.8-final\\alpine-sunset-pointillism.png"
+    },
+    {
+      "scene": "coastal-twilight",
+      "palette": "Munch — sunset / anxious",
+      "paletteRef": "Edvard Munch, sunset and twilight works",
+      "timing": {
+        "readImageDataMs": 24.8,
+        "paletteMs": 40.8,
+        "underpaintMs": 3606.1,
+        "grayscaleMs": 43.6,
+        "gradientMs": 2101.2,
+        "strokesMs": 22305.6,
+        "totalMs": 28122.1,
+        "strokeCount": 1044191,
+        "paletteSize": 80,
+        "brushThicknessPx": 8,
+        "megapixels": 17.4,
+        "projectedA3Ms": 28122
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v1.8-final\\coastal-twilight-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v1.8-final\\coastal-twilight-pointillism.png"
+    },
+    {
+      "scene": "forest-noon",
+      "palette": "Soutine — distorted landscape",
+      "paletteRef": "Chaïm Soutine, Céret and Cagnes landscapes",
+      "timing": {
+        "readImageDataMs": 21.1,
+        "paletteMs": 54.3,
+        "underpaintMs": 2562.1,
+        "grayscaleMs": 40.9,
+        "gradientMs": 1765.3,
+        "strokesMs": 20858.6,
+        "totalMs": 25302.4,
+        "strokeCount": 1044191,
+        "paletteSize": 80,
+        "brushThicknessPx": 8,
+        "megapixels": 17.4,
+        "projectedA3Ms": 25302
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v1.8-final\\forest-noon-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v1.8-final\\forest-noon-pointillism.png"
+    },
+    {
+      "scene": "storm-seascape",
+      "palette": "Nolde — storm and unsettled sea",
+      "paletteRef": "Emil Nolde, North Sea seascapes and storm paintings",
+      "timing": {
+        "readImageDataMs": 21.1,
+        "paletteMs": 40.2,
+        "underpaintMs": 2440.5,
+        "grayscaleMs": 42.5,
+        "gradientMs": 2331.4,
+        "strokesMs": 20725.4,
+        "totalMs": 25601.1,
+        "strokeCount": 1044191,
+        "paletteSize": 80,
+        "brushThicknessPx": 8,
+        "megapixels": 17.4,
+        "projectedA3Ms": 25601
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v1.8-final\\storm-seascape-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v1.8-final\\storm-seascape-pointillism.png"
+    },
+    {
+      "scene": "mountain-twilight",
+      "palette": "Whistler — nocturne",
+      "paletteRef": "James McNeill Whistler, Nocturnes (Battersea Bridge, Black and Gold, Blue and Silver)",
+      "timing": {
+        "readImageDataMs": 21.8,
+        "paletteMs": 42.7,
+        "underpaintMs": 2529.4,
+        "grayscaleMs": 40.3,
+        "gradientMs": 1718.3,
+        "strokesMs": 21211.6,
+        "totalMs": 25564,
+        "strokeCount": 1044191,
+        "paletteSize": 80,
+        "brushThicknessPx": 8,
+        "megapixels": 17.4,
+        "projectedA3Ms": 25564
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v1.8-final\\mountain-twilight-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v1.8-final\\mountain-twilight-pointillism.png"
+    },
+    {
+      "scene": "urban-dusk",
+      "palette": "Whistler — nocturne",
+      "paletteRef": "James McNeill Whistler, Nocturnes (Battersea Bridge, Black and Gold, Blue and Silver)",
+      "timing": {
+        "readImageDataMs": 24.4,
+        "paletteMs": 45.9,
+        "underpaintMs": 2610.4,
+        "grayscaleMs": 44.7,
+        "gradientMs": 1721.3,
+        "strokesMs": 21717.4,
+        "totalMs": 26164.1,
+        "strokeCount": 1044191,
+        "paletteSize": 80,
+        "brushThicknessPx": 8,
+        "megapixels": 17.4,
+        "projectedA3Ms": 26164
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v1.8-final\\urban-dusk-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v1.8-final\\urban-dusk-pointillism.png"
+    },
+    {
+      "scene": "desert-noon",
+      "palette": "Macke — Tunisian sun",
+      "paletteRef": "August Macke, Tunisian watercolours (1914)",
+      "timing": {
+        "readImageDataMs": 28.7,
+        "paletteMs": 37.6,
+        "underpaintMs": 2595.2,
+        "grayscaleMs": 42.2,
+        "gradientMs": 1735.8,
+        "strokesMs": 22352,
+        "totalMs": 26791.6,
+        "strokeCount": 1044191,
+        "paletteSize": 80,
+        "brushThicknessPx": 8,
+        "megapixels": 17.4,
+        "projectedA3Ms": 26792
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v1.8-final\\desert-noon-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v1.8-final\\desert-noon-pointillism.png"
+    }
+  ],
+  "averageTotalMs": 26415
+}

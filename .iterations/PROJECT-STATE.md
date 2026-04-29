@@ -89,10 +89,13 @@ when running in standard (non-comparison) mode:
 3. **forest-noon** → Soutine landscape
 4. **storm-seascape** → Nolde storm
 5. **mountain-twilight** → Whistler nocturne
-6. **urban-dusk** → Klimt golden (pairing borderline — Whistler nocturne is a
-   candidate replacement, see cycle-15 notes; current Klimt output reads as
-   "alley at night with distant warm light", atmospheric but dim)
+6. **urban-dusk** → Whistler nocturne (re-paired in cycle 16 from Klimt;
+   Whistler's Battersea/Cremorne nocturne palette is the unambiguous fit —
+   golden window-glow against deep blue, wet-pavement reflections)
 7. **desert-noon** → Macke Tunisian
+
+Note: urban-dusk and mountain-twilight share Whistler — intentional. Pairings
+are mood-fit (both are quiet blue-hour scenes), not painter-unique.
 
 These are SYNTHETIC sources (canvas-drawn, not Three.js renders). Real
 in-browser renders are a pending visual-QA gate the user has to drive.

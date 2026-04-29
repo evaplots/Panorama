@@ -1,0 +1,35 @@
+{
+  "version": "v1.8-mountain-klimt",
+  "runAt": "2026-04-29T09:40:49.368Z",
+  "resolution": {
+    "width": 4961,
+    "height": 3508,
+    "megapixels": 17.4
+  },
+  "nodeVersion": "v24.15.0",
+  "platform": "win32",
+  "scenes": [
+    {
+      "scene": "mountain-twilight__klimt-golden",
+      "palette": "Klimt — golden / ornamental",
+      "paletteRef": "Gustav Klimt, golden phase (The Kiss, Beethoven Frieze, Adele Bloch-Bauer)",
+      "timing": {
+        "readImageDataMs": 23.8,
+        "paletteMs": 0.5,
+        "underpaintMs": 13.5,
+        "grayscaleMs": 42.3,
+        "gradientMs": 1645.6,
+        "strokesMs": 19574.5,
+        "totalMs": 21300.2,
+        "strokeCount": 522095,
+        "paletteSize": 48,
+        "brushThicknessPx": 14,
+        "megapixels": 17.4,
+        "projectedA3Ms": 21300
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v1.8-mountain-klimt\\mountain-twilight__klimt-golden-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v1.8-mountain-klimt\\mountain-twilight__klimt-golden-pointillism.png"
+    }
+  ],
+  "averageTotalMs": 21300
+}

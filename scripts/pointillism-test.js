@@ -425,7 +425,12 @@ const SCENES = [
   { name: 'forest-noon', factory: makeForestNoon, paletteKey: 'soutine-landscape' },
   { name: 'storm-seascape', factory: makeStormSeascape, paletteKey: 'nolde-storm' },
   { name: 'mountain-twilight', factory: makeMountainTwilight, paletteKey: 'whistler-nocturne' },
-  { name: 'urban-dusk', factory: makeUrbanDusk, paletteKey: 'klimt-golden' },
+  // urban-dusk paired with Whistler-nocturne (cycle 16 finding: Whistler's
+  // Battersea / Cremorne nocturne palette is the unambiguous fit for night
+  // cityscapes — gold window-glow against deep blue, wet-pavement reflections.
+  // Two scenes now share Whistler — that's intentional; pairings are mood-fit
+  // not painter-unique.).
+  { name: 'urban-dusk', factory: makeUrbanDusk, paletteKey: 'whistler-nocturne' },
   { name: 'desert-noon', factory: makeDesertNoon, paletteKey: 'macke-tunisian' },
 ];
 
@@ -458,12 +463,16 @@ async function main() {
   //   --filter=name1,name2  → only run scenes whose name contains one of these substrings
   //   --curated             → use the SCENES[i].paletteKey curated palette
   //                           (default v1.1+: extract from source via median-cut)
+  //   --palette=KEY         → override curated palette for ALL scenes in this run
+  //                           (e.g. --palette=whistler-nocturne). Implies --curated.
+  //                           Output filenames get a __KEY suffix to distinguish.
   //   --no-median           → skip the 11×11 median underpainting (cheaper, less faithful)
   //   --no-smooth           → skip Gaussian gradient smoothing
   //   --no-extend           → skip palette saturation+hue extension
   const optsOverride = {};
   let sceneFilter = null;
   let useCurated = false;
+  let paletteOverride = null;
   for (const arg of process.argv.slice(2)) {
     if (arg.startsWith('--density=')) optsOverride.density = parseFloat(arg.split('=')[1]);
     if (arg.startsWith('--brush-stroke=')) optsOverride.brushStrokeFactor = parseFloat(arg.split('=')[1]);
@@ -473,6 +482,10 @@ async function main() {
     if (arg.startsWith('--temperature=')) optsOverride.paletteTemperature = parseFloat(arg.split('=')[1]);
     if (arg.startsWith('--filter=')) sceneFilter = arg.split('=')[1].split(',');
     if (arg === '--curated') useCurated = true;
+    if (arg.startsWith('--palette=')) {
+      paletteOverride = arg.split('=')[1];
+      useCurated = true;
+    }
     if (arg === '--no-median') optsOverride.applyMedianUnderpaint = false;
     if (arg === '--no-smooth') optsOverride.smoothGradientField = false;
     if (arg === '--no-extend') optsOverride.extendPalette = false;
@@ -491,8 +504,16 @@ async function main() {
 
   const allTimings = [];
 
-  for (const { name, factory, paletteKey } of runs) {
-    const palette = palettes[paletteKey];
+  for (const run of runs) {
+    const { factory } = run;
+    const effectiveKey = paletteOverride || run.paletteKey;
+    const palette = palettes[effectiveKey];
+    if (!palette) {
+      console.warn(`Skipping ${run.name}: unknown palette key "${effectiveKey}"`);
+      continue;
+    }
+    // Append palette suffix to scene name when override is active so filenames disambiguate.
+    const name = paletteOverride ? `${run.name}__${effectiveKey}` : run.name;
     console.log(`--- ${name} (palette: ${palette.name}) ---`);
 
     const t0 = performance.now();
