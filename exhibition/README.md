@@ -4,6 +4,9 @@ Print-ready PNG files for the six plates described in `../EXHIBITION.md`.
 All files A3 @ 300 DPI (4961×3508 px), ready to print or submit without
 further processing.
 
+For press inquiries / single-doc journalist-friendly summary, see
+[`PRESS-KIT.md`](./PRESS-KIT.md) in this folder.
+
 | File                                  | Plate | Title             | Painter   | Scene             |
 | ------------------------------------- | ----- | ----------------- | --------- | ----------------- |
 | `plate-i-sturm.png`                   | I     | *Sturm*           | Nolde     | storm seascape    |
