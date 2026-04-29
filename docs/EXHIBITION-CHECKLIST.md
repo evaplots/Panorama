@@ -91,12 +91,12 @@ The 3-2-1 rule: **3 copies, 2 different storage media, 1 offsite**.
 
 ## 6. Rights, licensing, attribution
 
-- [ ] Decide license for the underlying software: MIT (recommended for
-      open-source visibility / no friction for collaborators) vs. a
-      Creative Commons license for the rendered prints (CC BY-NC-SA
-      common for art works). They CAN be different
-- [ ] Add a `LICENSE` file to the repo root with the chosen software
-      license
+- [x] Software licensed MIT — `LICENSE` at project root
+- [x] Rendered artworks licensed CC BY-NC-SA 4.0 — `LICENSE-ART.md` at
+      project root, with explanation of the split-licence rationale and
+      a sample attribution string
+- [x] Painter palettes JSON dedicated to public domain (CC0) — declared
+      in `LICENSE-ART.md`
 - [ ] If submitting physical prints, decide edition size and signing
       protocol — most digital-art museums prefer either a small
       signed/numbered edition (e.g. 1/8) or a clear "open edition,
