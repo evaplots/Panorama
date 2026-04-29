@@ -417,21 +417,95 @@ function makeDesertNoon(w, h) {
   return c;
 }
 
-// Standard scene-palette pairings. v1.7 expands to 7 scenes (added urban-dusk
-// and desert-noon, paired with the recently curated Klimt and Macke palettes).
+function makeSnowBlizzard(w, h) {
+  // Whiteout in a snow storm — almost-monochrome high-key whites and pale greys
+  // with hints of slate and frozen blue. Diffuse forms, falling snow streaks,
+  // a barely-visible distant peak. Designed to pair with Turner's atmospheric
+  // fog/storm palette.
+  const c = createCanvas(w, h);
+  const ctx = c.getContext('2d');
+  // Sky: pale grey-white whiteout
+  const sky = ctx.createLinearGradient(0, 0, 0, h * 0.7);
+  sky.addColorStop(0, '#dfe4ea');
+  sky.addColorStop(0.5, '#eaedf0');
+  sky.addColorStop(1, '#f4f3f1');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, w, h * 0.7);
+
+  // Distant mountain mass dissolving into haze — barely visible
+  ctx.fillStyle = 'rgba(150, 158, 168, 0.55)';
+  ctx.beginPath();
+  ctx.moveTo(0, h * 0.65);
+  for (let x = 0; x <= w; x += w / 40) {
+    const y = h * (0.62 + 0.04 * Math.sin(x * 0.001 + 0.5));
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(w, h * 0.7);
+  ctx.lineTo(0, h * 0.7);
+  ctx.closePath();
+  ctx.fill();
+
+  // Pine-tree silhouettes, even more diffuse, on the foreground line
+  ctx.fillStyle = 'rgba(80, 95, 110, 0.45)';
+  for (let i = 0; i < 18; i++) {
+    const tx = w * (i / 17) + (Math.random() - 0.5) * w * 0.04;
+    const ty = h * 0.78;
+    const th = h * (0.06 + Math.random() * 0.08);
+    const tw = th * 0.4;
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(tx - tw / 2, ty + th);
+    ctx.lineTo(tx + tw / 2, ty + th);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Foreground snow plain — high-key with slight cool tint
+  const ground = ctx.createLinearGradient(0, h * 0.78, 0, h);
+  ground.addColorStop(0, '#e9edf3');
+  ground.addColorStop(1, '#d5d9df');
+  ctx.fillStyle = ground;
+  ctx.fillRect(0, h * 0.78, w, h * 0.22);
+
+  // Falling snow: lots of soft white streaks at varied angles
+  for (let i = 0; i < 1800; i++) {
+    const sx = Math.random() * w;
+    const sy = Math.random() * h;
+    const len = 12 + Math.random() * 28;
+    const angle = -Math.PI * 0.32 + (Math.random() - 0.5) * 0.18;
+    const dx = Math.cos(angle) * len;
+    const dy = Math.sin(angle) * len;
+    ctx.strokeStyle = `rgba(255, 255, 255, ${0.30 + Math.random() * 0.50})`;
+    ctx.lineWidth = 1 + Math.random() * 1.2;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(sx + dx, sy + dy);
+    ctx.stroke();
+  }
+  // A few darker ice-blue accents for depth
+  for (let i = 0; i < 80; i++) {
+    const sx = Math.random() * w;
+    const sy = Math.random() * h * 0.85;
+    ctx.fillStyle = `rgba(180, 200, 220, ${0.10 + Math.random() * 0.15})`;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 30 + Math.random() * 80, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  return c;
+}
+
+// Standard scene-palette pairings. v1.9 adds snow-blizzard → Turner (Turner's
+// famous snowstorms — Hannibal Crossing the Alps, Snow Storm at Sea — make
+// this an unambiguous fit; also gives Turner its first scene assignment).
 const SCENES = [
   { name: 'alpine-sunset', factory: makeAlpineSunset, paletteKey: 'kirchner-alpine' },
   { name: 'coastal-twilight', factory: makeCoastalTwilight, paletteKey: 'munch-sunset' },
   { name: 'forest-noon', factory: makeForestNoon, paletteKey: 'soutine-landscape' },
   { name: 'storm-seascape', factory: makeStormSeascape, paletteKey: 'nolde-storm' },
   { name: 'mountain-twilight', factory: makeMountainTwilight, paletteKey: 'whistler-nocturne' },
-  // urban-dusk paired with Whistler-nocturne (cycle 16 finding: Whistler's
-  // Battersea / Cremorne nocturne palette is the unambiguous fit for night
-  // cityscapes — gold window-glow against deep blue, wet-pavement reflections.
-  // Two scenes now share Whistler — that's intentional; pairings are mood-fit
-  // not painter-unique.).
   { name: 'urban-dusk', factory: makeUrbanDusk, paletteKey: 'whistler-nocturne' },
   { name: 'desert-noon', factory: makeDesertNoon, paletteKey: 'macke-tunisian' },
+  { name: 'snow-blizzard', factory: makeSnowBlizzard, paletteKey: 'turner-fog' },
 ];
 
 // v0.5 palette-comparison: ONE source scene, ALL palettes.
