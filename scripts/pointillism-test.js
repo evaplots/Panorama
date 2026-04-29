@@ -494,9 +494,122 @@ function makeSnowBlizzard(w, h) {
   return c;
 }
 
-// Standard scene-palette pairings. v1.9 adds snow-blizzard → Turner (Turner's
-// famous snowstorms — Hannibal Crossing the Alps, Snow Storm at Sea — make
-// this an unambiguous fit; also gives Turner its first scene assignment).
+function makeCanyon(w, h) {
+  // Red-rock canyon with dramatic late-afternoon side light. Sun coming from
+  // the right, casting long shadows across the canyon floor. Distant cliff
+  // tier in atmospheric perspective; near walls in saturated red-orange.
+  const c = createCanvas(w, h);
+  const ctx = c.getContext('2d');
+  // Sky: warm-pale near horizon, deeper above
+  const sky = ctx.createLinearGradient(0, 0, 0, h * 0.45);
+  sky.addColorStop(0, '#7a86a8');
+  sky.addColorStop(0.6, '#c4a098');
+  sky.addColorStop(1, '#e8c08a');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, w, h * 0.45);
+
+  // Distant rim — soft red-violet in atmospheric perspective
+  ctx.fillStyle = '#9a6868';
+  ctx.beginPath();
+  ctx.moveTo(0, h * 0.42);
+  for (let x = 0; x <= w; x += w / 25) {
+    const y = h * (0.40 + 0.025 * Math.sin(x * 0.0011 + 0.4));
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(w, h * 0.50);
+  ctx.lineTo(0, h * 0.50);
+  ctx.closePath();
+  ctx.fill();
+
+  // Mid cliff — warmer terra-cotta
+  ctx.fillStyle = '#c46838';
+  ctx.beginPath();
+  ctx.moveTo(0, h * 0.55);
+  // Carved step-shape canyon edge
+  const midY = h * 0.55;
+  ctx.lineTo(w * 0.10, midY - 60);
+  ctx.lineTo(w * 0.20, midY - 30);
+  ctx.lineTo(w * 0.32, midY - 80);
+  ctx.lineTo(w * 0.45, midY - 40);
+  ctx.lineTo(w * 0.55, midY - 70);
+  ctx.lineTo(w * 0.70, midY - 30);
+  ctx.lineTo(w * 0.82, midY - 60);
+  ctx.lineTo(w * 0.95, midY - 40);
+  ctx.lineTo(w, midY - 50);
+  ctx.lineTo(w, h * 0.68);
+  ctx.lineTo(0, h * 0.68);
+  ctx.closePath();
+  ctx.fill();
+
+  // Near walls: bright sun-lit red-orange (right side) vs shadow side (left)
+  // Right wall — sunlit
+  ctx.fillStyle = '#e87838';
+  ctx.beginPath();
+  ctx.moveTo(w * 0.55, h * 0.65);
+  ctx.lineTo(w, h * 0.50);
+  ctx.lineTo(w, h);
+  ctx.lineTo(w * 0.55, h);
+  ctx.closePath();
+  ctx.fill();
+  // Left wall — shadow side
+  ctx.fillStyle = '#6a3828';
+  ctx.beginPath();
+  ctx.moveTo(0, h * 0.55);
+  ctx.lineTo(w * 0.45, h * 0.70);
+  ctx.lineTo(w * 0.45, h);
+  ctx.lineTo(0, h);
+  ctx.closePath();
+  ctx.fill();
+
+  // Canyon floor — dark red-brown with shadow gradient
+  const floor = ctx.createLinearGradient(0, h * 0.78, 0, h);
+  floor.addColorStop(0, '#5a3024');
+  floor.addColorStop(1, '#382018');
+  ctx.fillStyle = floor;
+  ctx.fillRect(w * 0.30, h * 0.78, w * 0.40, h * 0.22);
+
+  // Long diagonal shadow streaks from sun-side cliffs across the floor
+  ctx.fillStyle = 'rgba(20, 10, 8, 0.45)';
+  for (let i = 0; i < 8; i++) {
+    const sx = w * (0.30 + i * 0.05);
+    ctx.beginPath();
+    ctx.moveTo(sx, h * 0.78);
+    ctx.lineTo(sx + 80, h * 0.78);
+    ctx.lineTo(sx - 60, h);
+    ctx.lineTo(sx - 140, h);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Texture: sandstone striations on cliff walls
+  ctx.strokeStyle = 'rgba(255, 200, 140, 0.18)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 80; i++) {
+    const sx = w * (0.55 + Math.random() * 0.45);
+    const sy = h * (0.55 + Math.random() * 0.40);
+    const len = 50 + Math.random() * 200;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(sx + len, sy + (Math.random() - 0.5) * 6);
+    ctx.stroke();
+  }
+  // Shadow-side striations
+  ctx.strokeStyle = 'rgba(180, 100, 60, 0.18)';
+  for (let i = 0; i < 80; i++) {
+    const sx = Math.random() * w * 0.45;
+    const sy = h * (0.55 + Math.random() * 0.40);
+    const len = 50 + Math.random() * 200;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(sx + len, sy + (Math.random() - 0.5) * 6);
+    ctx.stroke();
+  }
+  return c;
+}
+
+// Standard scene-palette pairings. v1.10 adds canyon → Marc-symbolic (red rock
+// + saturated sky pairs with Marc's primary-symbolism palette; Marc finally
+// has a scene assignment, leaving only Klimt as palette-only).
 const SCENES = [
   { name: 'alpine-sunset', factory: makeAlpineSunset, paletteKey: 'kirchner-alpine' },
   { name: 'coastal-twilight', factory: makeCoastalTwilight, paletteKey: 'munch-sunset' },
@@ -506,6 +619,7 @@ const SCENES = [
   { name: 'urban-dusk', factory: makeUrbanDusk, paletteKey: 'whistler-nocturne' },
   { name: 'desert-noon', factory: makeDesertNoon, paletteKey: 'macke-tunisian' },
   { name: 'snow-blizzard', factory: makeSnowBlizzard, paletteKey: 'turner-fog' },
+  { name: 'canyon', factory: makeCanyon, paletteKey: 'marc-symbolic' },
 ];
 
 // v0.5 palette-comparison: ONE source scene, ALL palettes.

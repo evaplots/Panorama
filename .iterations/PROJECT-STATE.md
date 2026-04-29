@@ -79,7 +79,7 @@ In `src/style/palettes.json`, available via `--curated` in the test harness:
 
 ---
 
-## Test corpus (8 synthetic source scenes)
+## Test corpus (9 synthetic source scenes)
 
 Defined in `scripts/pointillism-test.js`, each paired with a best-fit palette
 when running in standard (non-comparison) mode:
@@ -89,17 +89,17 @@ when running in standard (non-comparison) mode:
 3. **forest-noon** → Soutine landscape
 4. **storm-seascape** → Nolde storm
 5. **mountain-twilight** → Whistler nocturne
-6. **urban-dusk** → Whistler nocturne (cycle 16 re-pair — Battersea/Cremorne
-   match)
+6. **urban-dusk** → Whistler nocturne
 7. **desert-noon** → Macke Tunisian
-8. **snow-blizzard** → Turner fog (cycle 18 — Turner's famous snowstorm
-   paintings make this an unambiguous fit; Turner finally has a scene)
+8. **snow-blizzard** → Turner fog
+9. **canyon** → Marc symbolic (cycle 19 — red-rock canyon with sunlit/shadow
+   walls; Marc's primary-tension palette translates the warm-cool drama)
 
 Notes:
 - urban-dusk and mountain-twilight share Whistler — intentional, both quiet
   blue-hour scenes from different geographies.
-- Marc and Klimt remain palette-only (used in palette-comparison runs and
-  galleries). The other 7 painters each have at least one scene assignment.
+- All 8 painters now have scene assignments EXCEPT Klimt, which stays
+  palette-only (still rendered via palette-comparison and 9-painter gallery).
 
 These are SYNTHETIC sources (canvas-drawn, not Three.js renders). Real
 in-browser renders are a pending visual-QA gate the user has to drive.

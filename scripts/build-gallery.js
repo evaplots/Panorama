@@ -55,6 +55,64 @@ const GALLERIES = {
       },
     ],
   },
+  // 3×3 nine-scene canon — every scene-paired output at v1.4 expressionist
+  // settings, post canyon and snow-blizzard additions. Marc and Turner now
+  // have scene assignments; only Klimt remains palette-only.
+  // This is the canonical "every geography, every painter who got a scene"
+  // image — cycle 19's update of the eight-scenes layout.
+  'v1.4-nine-scenes': {
+    headline: 'Panorama v1.4 — nine geographies, eight painters',
+    cols: 3,
+    rows: 3,
+    captionHeight: 84,
+    picks: [
+      {
+        src: '2026-04-29-pointillism-v1.8-7scene-expressionist/alpine-sunset-pointillism.png',
+        title: 'Kirchner — alpine sunset',
+        sub: 'ultramarine vs cadmium tensions',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.8-7scene-expressionist/coastal-twilight-pointillism.png',
+        title: 'Munch — coastal twilight',
+        sub: 'anxious yellow-vs-purple horizon',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.8-7scene-expressionist/forest-noon-pointillism.png',
+        title: 'Soutine — forest noon',
+        sub: 'gestural earth, vertical trunks',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.8-7scene-expressionist/storm-seascape-pointillism.png',
+        title: 'Nolde — storm seascape',
+        sub: 'blood-orange horizon over violet sea',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.8-7scene-expressionist/mountain-twilight-pointillism.png',
+        title: 'Whistler — mountain twilight',
+        sub: 'whisper-quiet blue-hour with gold flecks',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.8-7scene-expressionist/urban-dusk-pointillism.png',
+        title: 'Whistler — urban dusk',
+        sub: 'Battersea-style night, golden window glow',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.8-7scene-expressionist/desert-noon-pointillism.png',
+        title: 'Macke — desert noon',
+        sub: 'sun-drenched Tunisian dunes',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.9-snow-blizzard/snow-blizzard-pointillism.png',
+        title: 'Turner — snow blizzard',
+        sub: 'whiteout dissolving into dark treeline',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.10-canyon/canyon-pointillism.png',
+        title: 'Marc — red-rock canyon',
+        sub: 'sunlit cliff vs shadowed wall, primary tensions',
+      },
+    ],
+  },
   // 4×2 eight-cell scene-pairing showcase. Seven scene-paired outputs at v1.4
   // expressionist settings + one Marc-on-alpine cell to add the primary-tension
   // register that the seven scene pairings don't include. The most balanced
