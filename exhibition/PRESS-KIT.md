@@ -30,7 +30,7 @@ it is an instrument for asking what *this specific place at this specific
 moment* would have looked like in the visual language of a painter who
 never saw it.
 
-## Six exhibit plates
+## Six exhibit plates + 81-cell matrix
 
 Curated portfolio of six prints, each A3 @ 300 DPI, ready to hang. Wall
 labels in [`../EXHIBITION.md`](../EXHIBITION.md). Print files in
@@ -38,6 +38,13 @@ labels in [`../EXHIBITION.md`](../EXHIBITION.md). Print files in
 process plates (source-and-painted side-by-side) in `exhibition/process/`.
 A 3×2 contact sheet of all six plates lives at
 `exhibition/exhibition-contact-sheet.png`.
+
+The full corpus is **nine geographic scenes × nine curated painter
+palettes = eighty-one renders**, all completed and shipped as a single
+A3 contact sheet at `exhibition/matrix-9x9.png` (web JPEG at
+`exhibition/web/matrix-9x9.jpg`). The matrix is the project's
+"thoroughness statement": each row is one scene through every painter;
+each column is one painter through every scene.
 
 | Plate | Title | Painter | Scene |
 |------|------|---------|------|

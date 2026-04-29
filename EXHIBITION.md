@@ -106,11 +106,16 @@ output is identical — which means each plate is reproducible at any future
 date. The palette key, brush settings, and source descriptor for each plate
 are recorded in the project's iteration log (`.iterations/`).
 
-The plates above are six chosen from a corpus of nine geographic scene
-types × nine painter palettes (eighty-one possible single-source
-combinations, fifty-four rendered at the time of writing). The selection
-represents the strongest examples of the project's range; the corpus
-itself argues for the work's generative nature.
+The plates above are six chosen from a corpus of **nine geographic scene
+types × nine painter palettes — all eighty-one combinations have been
+rendered**, and a single A3 contact sheet showing the entire matrix lives
+at `exhibition/matrix-9x9.png` (web-resolution JPEG at
+`exhibition/web/matrix-9x9.jpg`). The matrix is the project's
+"thoroughness statement": each row reads as one geography rendered through
+nine painters, each column as one painter's voice carried across nine very
+different geographies. The six selected plates above represent the
+strongest individual examples; the matrix itself argues for the work's
+generative nature at full scope.
 
 The next phase introduces real meteorology (Open-Meteo API) and real
 astronomy (NOAA SWPC, offline Hipparcos catalogue) as data inputs, so
