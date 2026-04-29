@@ -33,6 +33,39 @@ No paid APIs. No mandatory accounts. Just `npm install` and run.
 
 ---
 
+## Outputs (Phase 2.5 — exhibition-ready)
+
+The Phase 2.5 pointillism transform has shipped a curated portfolio of
+museum-bar prints. Six exhibit plates plus a 9 × 9 matrix of every
+geographic scene through every curated painter palette.
+
+- **[EXHIBITION.md](./EXHIBITION.md)** — artistic statement and curator
+  wall labels for the six plates (Nolde, Whistler, Kirchner, Turner,
+  Marc, Munch).
+- **[exhibition/PRESS-KIT.md](./exhibition/PRESS-KIT.md)** —
+  press-friendly summary with technical fact sheet for journalists.
+- **[exhibition/](./exhibition/)** — print-ready A3 PNGs at 300 DPI,
+  web-resolution JPEG thumbnails, A3-portrait process plates
+  (source + painted), 3×2 contact sheet, and the full 9×9 matrix.
+- **[docs/EXHIBITION-CHECKLIST.md](./docs/EXHIBITION-CHECKLIST.md)** —
+  practical pre-submission checklist (paper recommendations, framing,
+  3-2-1 backup, licensing, submission tracker template).
+- **[.iterations/PROJECT-STATE.md](./.iterations/PROJECT-STATE.md)** —
+  current state of the pointillism module (defaults, opt-in expressionist
+  preset, palette set, scene corpus, perf, parked items).
+
+The pointillism algorithm follows
+[`guillaume-gomez/to-pointillism`](https://github.com/guillaume-gomez/to-pointillism)
+faithfully: ColorThief-equivalent palette extraction (or curated painter
+override), Scharr gradient + Gaussian smoothing, 11×11 median underpainting,
+weighted-random palette sampling. Stroke width is a physical measurement
+(default 0.7 mm) so a print at any DPI carries the same texture.
+
+Two licences: software [MIT](./LICENSE), rendered artworks
+[CC BY-NC-SA 4.0](./LICENSE-ART.md).
+
+---
+
 ## Document map
 
 Read these in order if you're new to the codebase:
