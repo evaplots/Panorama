@@ -55,6 +55,48 @@ const GALLERIES = {
       },
     ],
   },
+  // The six EXHIBITION.md plates as a 3×2 contact sheet. Distinct from
+  // best-of-mixed in that this gallery's selection mirrors EXHIBITION.md
+  // exactly — same six picks, same six titles. Use this as the "one image
+  // that summarises the curated portfolio submission" pitch image.
+  'exhibition-six': {
+    headline: 'Panorama — exhibition portfolio (six plates)',
+    cols: 3,
+    rows: 2,
+    captionHeight: 92,
+    picks: [
+      {
+        src: '2026-04-29-pointillism-v1.8-7scene-expressionist/storm-seascape-pointillism.png',
+        title: 'I. Sturm',
+        sub: 'storm seascape, after Nolde',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.8-7scene-expressionist/urban-dusk-pointillism.png',
+        title: 'II. Battersea, Imagined',
+        sub: 'urban dusk, after Whistler',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.8-7scene-expressionist/alpine-sunset-pointillism.png',
+        title: 'III. Alpine Vibration',
+        sub: 'alpine sunset, after Kirchner',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.9-snow-blizzard/snow-blizzard-pointillism.png',
+        title: 'IV. Snow Storm',
+        sub: 'whiteout blizzard, after Turner',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.10-canyon/canyon-pointillism.png',
+        title: 'V. Red Walls',
+        sub: 'desert canyon, after Marc',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.8-7scene-expressionist/coastal-twilight-pointillism.png',
+        title: 'VI. Anxious Twilight',
+        sub: 'coastal twilight, after Munch',
+      },
+    ],
+  },
   // 3×3 nine-scene canon — every scene-paired output at v1.4 expressionist
   // settings, post canyon and snow-blizzard additions. Marc and Turner now
   // have scene assignments; only Klimt remains palette-only.
