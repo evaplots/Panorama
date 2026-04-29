@@ -89,3 +89,11 @@ collaboration. But it's a meaningful one-time setup the user should drive.
 
 **Until I hear back:** /schedule is not created. /loop continues to fire
 every 30 min in this session.
+
+**Update 2026-04-29 03:39:** User created the GitHub repo at
+`https://github.com/evaplots/Panorama.git`. Local repo initialised, first
+commit `b884d54` ready. Push from CLI is hanging on Git Credential Manager
+auth popup (background bash can't surface the popup). Workaround: user runs
+`!git push -u origin main --force-with-lease` interactively in this session,
+authenticates once, push lands, then routine creation can proceed. Blocker
+downgraded from "no GitHub repo" to "transient auth step in progress".
