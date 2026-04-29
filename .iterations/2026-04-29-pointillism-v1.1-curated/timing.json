@@ -1,0 +1,35 @@
+{
+  "version": "v1.1-curated",
+  "runAt": "2026-04-29T05:13:24.289Z",
+  "resolution": {
+    "width": 4961,
+    "height": 3508,
+    "megapixels": 17.4
+  },
+  "nodeVersion": "v24.15.0",
+  "platform": "win32",
+  "scenes": [
+    {
+      "scene": "storm-seascape",
+      "palette": "Nolde — storm and unsettled sea",
+      "paletteRef": "Emil Nolde, North Sea seascapes and storm paintings",
+      "timing": {
+        "readImageDataMs": 22.7,
+        "paletteMs": 0.5,
+        "underpaintMs": 14.1,
+        "grayscaleMs": 42.6,
+        "gradientMs": 1689.3,
+        "strokesMs": 20012.5,
+        "totalMs": 21781.7,
+        "strokeCount": 1044191,
+        "paletteSize": 48,
+        "brushThicknessPx": 8,
+        "megapixels": 17.4,
+        "projectedA3Ms": 21782
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v1.1-curated\\storm-seascape-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v1.1-curated\\storm-seascape-pointillism.png"
+    }
+  ],
+  "averageTotalMs": 21782
+}

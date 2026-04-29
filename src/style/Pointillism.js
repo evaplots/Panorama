@@ -1,4 +1,10 @@
 import { toGrayscale, computeScharr } from './gradient.js';
+import {
+  extractPalette,
+  extendPalette as extendPaletteFn,
+  smoothGradient,
+  medianBlur11,
+} from './algorithm.js';
 
 // Default canvas factory — used in browsers. Node tests inject their own via opts.createCanvas
 // (e.g. node-canvas's createCanvas), keeping this module environment-agnostic.
@@ -20,29 +26,53 @@ function mulberry32(seed) {
   };
 }
 
-// v0.2 seed palette — Munch-sunset by default. Curated palettes are loaded from
-// src/style/palettes.json; pass opts.palette to override per render.
-const SEED_PALETTE = [
-  [255, 218, 120], [240, 158, 60], [220, 90, 70], [180, 50, 90],
-  [120, 40, 100], [70, 50, 130], [40, 40, 80], [200, 220, 130],
-  [120, 160, 80], [60, 100, 70], [240, 240, 220], [20, 20, 30],
-];
-
 const DEFAULTS = {
-  density: 0.045,           // fraction of pixels that get a stroke
-  brushThickness: 9,        // ellipse minor radius (px) — strokes need to read at A3
-  brushStrokeFactor: 2.4,   // major-axis multiplier per √(gradient magnitude) — high so
-                            // edges get dramatically long strokes and flat regions stay short
-  brushOpacity: 0.58,       // strokes layer like real paint
+  // v1.1-faithful baseline. Restored fidelity to guillaume-gomez/to-pointillism:
+  // ColorThief-equivalent palette extraction from the rendered scene by default,
+  // saturation+hue-rotation palette extension, Gaussian gradient smoothing,
+  // 11×11 median-blur underpainting. The v1.0 impasto defaults (curated palette
+  // by default, no smoothing, no median underpainting) were a creative drift
+  // away from the reference; restored 2026-04-29 per user redirect.
+
+  // Stroke-width as a physical measurement. brushWidthMm × dpi / 25.4 gives
+  // the pixel value used as the ellipse minor radius. Default 0.7 mm at 300 DPI
+  // ≈ 8.27 px, matching the reference's empirical computeBrushThickness for A3.
+  brushWidthMm: 0.7,        // physical width, default 0.7 mm (bounds 0.3–3.0)
+  dpi: 300,                 // export DPI used to convert mm → px
+
+  density: 0.06,            // fraction of pixels that get a stroke; reference uses
+                            // ~all pixels in random order (density 1.0) but for A3
+                            // that's prohibitive — 0.06 keeps run time tractable
+                            // while preserving the gradient-flow look.
+  brushStrokeFactor: 1.0,   // major-axis multiplier per √(gradient magnitude),
+                            // matches the reference's default stroke-elongation.
+  brushOpacity: 0.85,       // matches the reference's default opacity
   paletteTemperature: 28,   // softmax temperature for weighted-random palette (lower = sharper)
-                            // tightened from 35 so each region settles into a more coherent hue
   flatGradientThreshold: 8, // below this gradient magnitude, stroke angle becomes random
                             // (prevents sky/water/wall regions from all raking the same way)
-  windDirectionDeg: null,   // null = let gradient drive direction; number = bias toward wind
-  windInfluence: 0.0,       // 0..1 — when windDirectionDeg is set, how strongly it pulls strokes
-                            // toward wind direction. Default 0 because bias-not-override needs
-                            // real wind data from Weather module to be meaningful.
-  palette: SEED_PALETTE,
+  windDirectionDeg: null,   // null = let gradient drive; number = bias toward wind
+  windInfluence: 0.0,       // 0..1 — when windDirectionDeg is set, how strongly it pulls
+                            // strokes toward wind. Default 0; needs Weather module data.
+
+  // Palette options. Default: extract from source via median-cut (ColorThief equivalent).
+  //   palette: null            → extract from source (default)
+  //   palette: [[r,g,b], ...]  → use the given palette directly
+  //   (curated palettes from src/style/palettes.json must be loaded by the caller
+  //    and passed via this opt — the algorithm itself is palettes-agnostic)
+  palette: null,
+  paletteSize: 20,          // ColorThief k-value for source extraction
+  extendPalette: true,      // apply saturation-boost + 2× hue-rotation extension
+  paletteSatBoost: 20,      // saturation boost (HSL %) for extension
+  paletteHueJitter: 20,     // hue rotation range (deg) for extension
+
+  // Underpainting smoothing
+  applyMedianUnderpaint: true,  // 11×11 median blur on source before painting
+  medianKernel: 11,             // square kernel size; reference uses 11
+
+  // Gradient smoothing
+  smoothGradientField: true,    // Gaussian-equivalent smoothing on dx/dy
+  // smoothing radius defaults to max(w,h)/50 per the reference; can override
+
   seed: 0xC0FFEE,
 };
 
@@ -62,21 +92,53 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
   const srcData = srcCtx.getImageData(0, 0, width, height);
   const tRead = performance.now();
 
-  // Soft underpainting: copy source as base, strokes overpaint.
   const createCanvas = o.createCanvas || browserCreateCanvas;
+  const rand = mulberry32(o.seed);
+
+  // ─── Palette: extract or accept ──────────────────────────────────────────
+  let palette;
+  if (Array.isArray(o.palette) && o.palette.length > 0) {
+    palette = o.palette.map(c => [c[0], c[1], c[2]]);
+  } else {
+    palette = extractPalette(srcData, o.paletteSize);
+  }
+  if (o.extendPalette) {
+    palette = extendPaletteFn(palette, o.paletteSatBoost, o.paletteHueJitter, rand);
+  }
+  const tPalette = performance.now();
+
+  // ─── Median-blur underpainting ───────────────────────────────────────────
   const out = createCanvas(width, height);
   const ctx = out.getContext('2d');
-  ctx.drawImage(sourceCanvas, 0, 0);
-  const tCopy = performance.now();
+  if (o.applyMedianUnderpaint) {
+    const medianRGBA = medianBlur11(srcData.data, width, height, o.medianKernel);
+    // ctx.createImageData works in both browser and node-canvas; the global
+    // ImageData constructor is browser-only, so we route through ctx.
+    const underData = ctx.createImageData(width, height);
+    underData.data.set(medianRGBA);
+    ctx.putImageData(underData, 0, 0);
+  } else {
+    ctx.drawImage(sourceCanvas, 0, 0);
+  }
+  const tUnder = performance.now();
 
+  // ─── Gradient: greyscale → Scharr → smooth ──────────────────────────────
   const gray = toGrayscale(srcData);
   const tGray = performance.now();
-  const { dx, dy } = computeScharr(gray, width, height);
+  let { dx, dy } = computeScharr(gray, width, height);
+  if (o.smoothGradientField) {
+    const r = o.gradientSmoothRadius ?? Math.round(Math.max(width, height) / 50);
+    ({ dx, dy } = smoothGradient(dx, dy, width, height, r));
+  }
   const tGrad = performance.now();
 
+  // ─── Stroke pass ─────────────────────────────────────────────────────────
+  const brushThicknessPx = Math.max(
+    1,
+    Math.round(o.brushWidthMm * o.dpi / 25.4),
+  );
+
   const strokeCount = Math.floor(width * height * o.density);
-  const rand = mulberry32(o.seed);
-  const palette = o.palette;
   const paletteLen = palette.length;
   const data = srcData.data;
 
@@ -87,7 +149,6 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
   const windInfluence = Math.max(0, Math.min(1, o.windInfluence));
   const flatThreshold = o.flatGradientThreshold;
 
-  // Pre-compute weighted-random palette probabilities scratch buffer.
   const probs = new Float32Array(paletteLen);
   const temperature = o.paletteTemperature;
 
@@ -102,8 +163,8 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
     const b = data[srcIdx + 2];
 
     // Weighted-random palette sampling — softmax over -distance/temperature.
-    // This is the Seurat "vibration" effect: nearby palette colours all have
-    // some probability, so a region settles into a mix rather than one flat hue.
+    // Per to-pointillism reference: nearby palette colours all have nonzero
+    // probability so flat regions vibrate rather than snap to one solid hue.
     let minD = Infinity;
     for (let p = 0; p < paletteLen; p++) {
       const pc = palette[p];
@@ -114,7 +175,6 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
     }
     let probSum = 0;
     for (let p = 0; p < paletteLen; p++) {
-      // Subtract minD before softmax to keep values numerically reasonable.
       const w = Math.exp(-(probs[p] - minD) / temperature);
       probs[p] = w;
       probSum += w;
@@ -131,18 +191,12 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
     const gyv = dy[idx];
     const mag = Math.hypot(gxv, gyv);
 
-    // Stroke angle. In flat regions (low gradient), use a random angle so the
-    // sky/sea/wall doesn't all rake the same way. In textured regions, follow
-    // the gradient so edges (mountains, horizons, tree-trunks) read clearly.
-    // If wind data is available, blend gradient with wind direction by `windInfluence`.
     let angle;
     if (mag < flatThreshold) {
       angle = rand() * Math.PI * 2;
     } else {
       angle = Math.atan2(gyv, gxv) + Math.PI / 2;
       if (windRad !== null && windInfluence > 0) {
-        // Pull stroke toward wind direction. Use shortest-arc rotation so we
-        // don't accidentally invert when angles wrap past ±π.
         let delta = windRad - angle;
         while (delta > Math.PI) delta -= 2 * Math.PI;
         while (delta < -Math.PI) delta += 2 * Math.PI;
@@ -150,26 +204,28 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
       }
     }
 
-    const length = o.brushThickness + o.brushThickness * o.brushStrokeFactor * Math.sqrt(mag);
+    const length = brushThicknessPx + brushThicknessPx * o.brushStrokeFactor * Math.sqrt(mag);
 
     ctx.fillStyle = `rgb(${pr},${pg},${pb})`;
     ctx.beginPath();
-    ctx.ellipse(x, y, length, o.brushThickness, angle, 0, Math.PI * 2);
+    ctx.ellipse(x, y, length, brushThicknessPx, angle, 0, Math.PI * 2);
     ctx.fill();
   }
   const tEnd = performance.now();
 
   const timing = {
     readImageDataMs: +(tRead - t0).toFixed(1),
-    copyUnderpaintingMs: +(tCopy - tRead).toFixed(1),
-    grayscaleMs: +(tGray - tCopy).toFixed(1),
+    paletteMs: +(tPalette - tRead).toFixed(1),
+    underpaintMs: +(tUnder - tPalette).toFixed(1),
+    grayscaleMs: +(tGray - tUnder).toFixed(1),
     gradientMs: +(tGrad - tGray).toFixed(1),
     strokesMs: +(tEnd - tGrad).toFixed(1),
     totalMs: +(tEnd - t0).toFixed(1),
     strokeCount,
+    paletteSize: paletteLen,
+    brushThicknessPx,
     megapixels: +(width * height / 1e6).toFixed(2),
   };
-  // Linear projection to A3 @ 300 DPI (4961×3508 = 17.4 MP).
   timing.projectedA3Ms = +(timing.totalMs * 17.4 / timing.megapixels).toFixed(0);
 
   return { canvas: out, timing };

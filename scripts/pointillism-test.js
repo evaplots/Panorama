@@ -297,13 +297,33 @@ async function main() {
     VERSION === 'v0.5' || VERSION.endsWith('-comp') || compareArg;
 
   // Optional CLI flags:
-  //   --density=0.10      → override DEFAULTS.density for this run
-  //   --filter=name1,name2 → only run scenes whose name contains one of these substrings
-  let densityOverride = null;
+  //   --density=0.10        → override DEFAULTS.density
+  //   --brush-stroke=3.5    → override DEFAULTS.brushStrokeFactor (length per √magnitude)
+  //   --width-mm=0.7        → override DEFAULTS.brushWidthMm (physical stroke width in mm)
+  //   --dpi=300             → override DEFAULTS.dpi (used for mm → px conversion)
+  //   --opacity=0.5         → override DEFAULTS.brushOpacity
+  //   --temperature=20      → override DEFAULTS.paletteTemperature (lower = sharper palette)
+  //   --filter=name1,name2  → only run scenes whose name contains one of these substrings
+  //   --curated             → use the SCENES[i].paletteKey curated palette
+  //                           (default v1.1+: extract from source via median-cut)
+  //   --no-median           → skip the 11×11 median underpainting (cheaper, less faithful)
+  //   --no-smooth           → skip Gaussian gradient smoothing
+  //   --no-extend           → skip palette saturation+hue extension
+  const optsOverride = {};
   let sceneFilter = null;
+  let useCurated = false;
   for (const arg of process.argv.slice(2)) {
-    if (arg.startsWith('--density=')) densityOverride = parseFloat(arg.split('=')[1]);
+    if (arg.startsWith('--density=')) optsOverride.density = parseFloat(arg.split('=')[1]);
+    if (arg.startsWith('--brush-stroke=')) optsOverride.brushStrokeFactor = parseFloat(arg.split('=')[1]);
+    if (arg.startsWith('--width-mm=')) optsOverride.brushWidthMm = parseFloat(arg.split('=')[1]);
+    if (arg.startsWith('--dpi=')) optsOverride.dpi = parseFloat(arg.split('=')[1]);
+    if (arg.startsWith('--opacity=')) optsOverride.brushOpacity = parseFloat(arg.split('=')[1]);
+    if (arg.startsWith('--temperature=')) optsOverride.paletteTemperature = parseFloat(arg.split('=')[1]);
     if (arg.startsWith('--filter=')) sceneFilter = arg.split('=')[1].split(',');
+    if (arg === '--curated') useCurated = true;
+    if (arg === '--no-median') optsOverride.applyMedianUnderpaint = false;
+    if (arg === '--no-smooth') optsOverride.smoothGradientField = false;
+    if (arg === '--no-extend') optsOverride.extendPalette = false;
   }
 
   let runs = isComparison
@@ -333,14 +353,18 @@ async function main() {
 
     const opts = {
       createCanvas,
-      palette: palette.colors,
       // No wind override in v0.3+ — strokes follow image gradient so
       // mountains, horizons, tree trunks become visible structural features.
       // Wind binding will return as a BIAS (windInfluence > 0) once real
       // weather data ships from the Weather module.
       seed: 0xC0FFEE ^ name.length,
+      ...optsOverride,
     };
-    if (densityOverride !== null) opts.density = densityOverride;
+    // Default v1.1+: palette extracted from source via median-cut. The curated
+    // painter palettes from src/style/palettes.json are opt-in via --curated.
+    if (useCurated) {
+      opts.palette = palette.colors;
+    }
     const { canvas: stylized, timing } = await applyPointillism(src, opts);
     console.log(`  pointillism: ${timing.totalMs} ms ` +
       `(gradient ${timing.gradientMs}, ${timing.strokeCount.toLocaleString()} strokes ${timing.strokesMs} ms)`);

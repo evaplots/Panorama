@@ -363,6 +363,45 @@ These bindings ship with the v0 pointillism prototype. They are deliberately min
 | Brushstroke length          | `weather.wind.speedMs`                     | base × (1 + windSpeedMs/10) — calmer days = shorter strokes     |
 | Palette                     | `palettes.json` curated set + `sun.phase`  | nearest curated palette by climate-zone × sun.phase enum         |
 
+### Stroke-width as physical measurement (v1.1+)
+
+Stroke width is specified as a **physical measurement in millimetres**, not a pixel count, so that paintings rendered at any export DPI come out with consistent visual texture. The pixel value is derived at trigger time from the export DPI:
+
+```
+brushThicknessPx = round(brushWidthMm × dpi / 25.4)
+```
+
+| Field           | Default | Bounds       | Notes                                                           |
+| --------------- | ------- | ------------ | --------------------------------------------------------------- |
+| `brushWidthMm`  | `0.7`   | `0.3` – `3.0` | Physical stroke width in mm. 0.7 mm at 300 DPI ≈ 8.27 px (matches the to-pointillism reference's empirical computeBrushThickness for A3). Lower values = pointillism / Seurat character; higher values = impasto / Soutine character. |
+| `dpi`           | `300`   | export-derived | The DPI at which the painting will be rasterised. Default 300 matches the canonical A3 print target. |
+
+Length still varies per stroke as `brushThicknessPx + brushThicknessPx × brushStrokeFactor × √magnitude` — only the width is fixed by physical measurement. Wind-bound stroke direction (when `windDirectionDeg` is set) is unaffected.
+
+### Palette: extracted-from-source vs curated (v1.1+)
+
+The Style module's default behaviour is to **extract the palette from the rendered scene** via median-cut (a ColorThief-equivalent), then extend it via saturation-boost and 2× hue-rotation copies — matching `guillaume-gomez/to-pointillism`'s palette pipeline. Curated painter palettes (Munch, Kirchner, Soutine, Whistler, Turner, Marc, Nolde — see `src/style/palettes.json`) are **opt-in overrides**.
+
+| Field                | Default  | Notes                                                           |
+| -------------------- | -------- | --------------------------------------------------------------- |
+| `palette`            | `null`   | `null` → extract from source via median-cut; pass an array of `[r,g,b]` triples to override (curated).                            |
+| `paletteSize`        | `20`     | k-value for the median-cut extraction                           |
+| `extendPalette`      | `true`   | Apply saturation-boost + 2× hue-rotation extension (4× size)   |
+| `paletteSatBoost`    | `20`     | Saturation increase (HSL %) for the boosted copy               |
+| `paletteHueJitter`   | `20`     | Hue rotation range (deg) for the two random-hue copies         |
+| `paletteTemperature` | `28`     | Softmax temperature for weighted-random sampling per stroke    |
+
+Curated palettes can be invoked from a future palette-by-context routing layer (climate × sun.phase enum) once it exists, but that lookup is deliberately not the default — extracting the palette from the actual rendered scene preserves the per-image chromatic relationship the painter would have observed.
+
+### Underpainting and gradient smoothing (v1.1+)
+
+| Field                    | Default  | Notes                                                       |
+| ------------------------ | -------- | ----------------------------------------------------------- |
+| `applyMedianUnderpaint`  | `true`   | Apply 11×11 RGB median blur on the source as the soft underpainting strokes paint over (matches the reference's `cv.medianBlur` step). Disable for cheaper but less-faithful runs. |
+| `medianKernel`           | `11`     | Square kernel size; reference uses 11. Lower for speed at edge-preservation cost. |
+| `smoothGradientField`    | `true`   | Apply Gaussian-equivalent smoothing (3-pass separable box blur) to the Scharr gradient field. Reference radius = `max(width, height) / 50`. |
+| `gradientSmoothRadius`   | derived  | Override the default radius if needed.                      |
+
 **Explicitly NOT v0 bindings**, despite intuition:
 
 - Sun altitude → grid density (creative reviewer flagged: counterintuitive — Seurat used dense dots for *darks*, not lights)
