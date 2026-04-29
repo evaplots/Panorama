@@ -267,14 +267,166 @@ function makeMountainTwilight(w, h) {
   return c;
 }
 
-// Standard scene-palette pairings — v0.8 expands the corpus from 3 to 5,
-// each scene paired with the painter whose palette best fits its mood.
+function makeUrbanDusk(w, h) {
+  // City silhouette at twilight — warm sky, dark building stack with lit windows.
+  const c = createCanvas(w, h);
+  const ctx = c.getContext('2d');
+  // Sky: warm gold-orange at horizon dissolving to deep purple-blue at top
+  const sky = ctx.createLinearGradient(0, 0, 0, h * 0.65);
+  sky.addColorStop(0, '#1c2240');
+  sky.addColorStop(0.5, '#704868');
+  sky.addColorStop(0.85, '#d88058');
+  sky.addColorStop(1, '#e8a058');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, w, h * 0.65);
+
+  // Distant sun glow on horizon
+  const sunGrad = ctx.createRadialGradient(w * 0.35, h * 0.62, 0, w * 0.35, h * 0.62, w * 0.25);
+  sunGrad.addColorStop(0, 'rgba(255, 220, 150, 0.65)');
+  sunGrad.addColorStop(1, 'rgba(255, 220, 150, 0)');
+  ctx.fillStyle = sunGrad;
+  ctx.fillRect(0, h * 0.4, w, h * 0.35);
+
+  // Cityscape: stack of building rectangles forming a skyline
+  // Heights vary; some have visible window grids
+  const baseLine = h * 0.65;
+  const buildings = [];
+  let cx = 0;
+  while (cx < w) {
+    const bw = 80 + Math.random() * 320;
+    const bh = h * (0.10 + Math.random() * 0.30);
+    buildings.push({ x: cx, w: bw, h: bh });
+    cx += bw + Math.random() * 30;
+  }
+  for (const b of buildings) {
+    const top = baseLine - b.h;
+    // Building body — darken with slight variation
+    const tone = 24 + Math.floor(Math.random() * 22);
+    ctx.fillStyle = `rgb(${tone},${tone + 5},${tone + 18})`;
+    ctx.fillRect(b.x, top, b.w, b.h);
+    // Window grid: small lit warm rectangles, sparse
+    const cols = Math.max(2, Math.floor(b.w / 22));
+    const rows = Math.max(2, Math.floor(b.h / 28));
+    for (let r = 0; r < rows; r++) {
+      for (let cc = 0; cc < cols; cc++) {
+        if (Math.random() < 0.42) {
+          const wx = b.x + 6 + cc * (b.w - 12) / cols;
+          const wy = top + 8 + r * (b.h - 16) / rows;
+          const wsize = 4 + Math.random() * 4;
+          const warmth = 200 + Math.floor(Math.random() * 55);
+          ctx.fillStyle = `rgba(${warmth},${warmth - 50},${100 + Math.floor(Math.random() * 60)},0.85)`;
+          ctx.fillRect(wx, wy, wsize, wsize * 0.6);
+        }
+      }
+    }
+  }
+
+  // Foreground street / haze
+  const fgGrad = ctx.createLinearGradient(0, h * 0.65, 0, h);
+  fgGrad.addColorStop(0, '#1a1825');
+  fgGrad.addColorStop(1, '#2a2030');
+  ctx.fillStyle = fgGrad;
+  ctx.fillRect(0, h * 0.65, w, h * 0.35);
+  // Reflection streaks (wet pavement)
+  for (let i = 0; i < 30; i++) {
+    const sx = Math.random() * w;
+    const len = 60 + Math.random() * 220;
+    const sy = h * 0.78 + Math.random() * h * 0.18;
+    ctx.fillStyle = `rgba(${180 + Math.random() * 60},${130 + Math.random() * 40},${80 + Math.random() * 40},${0.06 + Math.random() * 0.10})`;
+    ctx.fillRect(sx, sy, len, 2 + Math.random() * 3);
+  }
+  return c;
+}
+
+function makeDesertNoon(w, h) {
+  // Desert dune landscape under harsh midday sun.
+  const c = createCanvas(w, h);
+  const ctx = c.getContext('2d');
+  // Sky: pale bleached white-blue at top, hot peach near horizon
+  const sky = ctx.createLinearGradient(0, 0, 0, h * 0.55);
+  sky.addColorStop(0, '#9bbac8');
+  sky.addColorStop(0.6, '#dcd0b8');
+  sky.addColorStop(1, '#f0c498');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, w, h * 0.55);
+
+  // Distant heat-shimmer haze layer on horizon
+  ctx.fillStyle = 'rgba(255, 220, 170, 0.30)';
+  ctx.fillRect(0, h * 0.50, w, h * 0.06);
+
+  // Far dunes — light-warm beige
+  ctx.fillStyle = '#d4a070';
+  ctx.beginPath();
+  ctx.moveTo(0, h * 0.58);
+  for (let x = 0; x <= w; x += w / 30) {
+    const y = h * (0.56 + 0.025 * Math.sin(x * 0.0009 + 0.7));
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(w, h * 0.65);
+  ctx.lineTo(0, h * 0.65);
+  ctx.closePath();
+  ctx.fill();
+
+  // Mid dunes — warm sand
+  ctx.fillStyle = '#c08858';
+  ctx.beginPath();
+  ctx.moveTo(0, h * 0.68);
+  for (let x = 0; x <= w; x += w / 20) {
+    const y = h * (0.66 + 0.04 * Math.sin(x * 0.0014 + 1.5));
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(w, h * 0.78);
+  ctx.lineTo(0, h * 0.78);
+  ctx.closePath();
+  ctx.fill();
+
+  // Foreground dune with strong shadow side
+  ctx.fillStyle = '#a06840';
+  ctx.beginPath();
+  ctx.moveTo(0, h * 0.82);
+  for (let x = 0; x <= w; x += w / 14) {
+    const y = h * (0.80 + 0.06 * Math.sin(x * 0.0019 + 2.1));
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(w, h);
+  ctx.lineTo(0, h);
+  ctx.closePath();
+  ctx.fill();
+
+  // Ripple texture across foreground
+  ctx.strokeStyle = 'rgba(180, 130, 80, 0.16)';
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < 200; i++) {
+    const sx = Math.random() * w;
+    const sy = h * 0.80 + Math.random() * h * 0.20;
+    const len = 30 + Math.random() * 80;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.bezierCurveTo(sx + len * 0.3, sy - 4, sx + len * 0.7, sy + 4, sx + len, sy);
+    ctx.stroke();
+  }
+  // Shadow side highlights
+  for (let i = 0; i < 80; i++) {
+    const sx = Math.random() * w;
+    const sy = h * (0.66 + Math.random() * 0.30);
+    ctx.fillStyle = `rgba(60, 35, 25, ${0.05 + Math.random() * 0.10})`;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 30 + Math.random() * 80, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  return c;
+}
+
+// Standard scene-palette pairings. v1.7 expands to 7 scenes (added urban-dusk
+// and desert-noon, paired with the recently curated Klimt and Macke palettes).
 const SCENES = [
   { name: 'alpine-sunset', factory: makeAlpineSunset, paletteKey: 'kirchner-alpine' },
   { name: 'coastal-twilight', factory: makeCoastalTwilight, paletteKey: 'munch-sunset' },
   { name: 'forest-noon', factory: makeForestNoon, paletteKey: 'soutine-landscape' },
   { name: 'storm-seascape', factory: makeStormSeascape, paletteKey: 'nolde-storm' },
   { name: 'mountain-twilight', factory: makeMountainTwilight, paletteKey: 'whistler-nocturne' },
+  { name: 'urban-dusk', factory: makeUrbanDusk, paletteKey: 'klimt-golden' },
+  { name: 'desert-noon', factory: makeDesertNoon, paletteKey: 'macke-tunisian' },
 ];
 
 // v0.5 palette-comparison: ONE source scene, ALL palettes.

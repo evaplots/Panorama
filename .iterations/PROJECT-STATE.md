@@ -79,7 +79,7 @@ In `src/style/palettes.json`, available via `--curated` in the test harness:
 
 ---
 
-## Test corpus (5 synthetic source scenes)
+## Test corpus (7 synthetic source scenes)
 
 Defined in `scripts/pointillism-test.js`, each paired with a best-fit palette
 when running in standard (non-comparison) mode:
@@ -89,6 +89,10 @@ when running in standard (non-comparison) mode:
 3. **forest-noon** → Soutine landscape
 4. **storm-seascape** → Nolde storm
 5. **mountain-twilight** → Whistler nocturne
+6. **urban-dusk** → Klimt golden (pairing borderline — Whistler nocturne is a
+   candidate replacement, see cycle-15 notes; current Klimt output reads as
+   "alley at night with distant warm light", atmospheric but dim)
+7. **desert-noon** → Macke Tunisian
 
 These are SYNTHETIC sources (canvas-drawn, not Three.js renders). Real
 in-browser renders are a pending visual-QA gate the user has to drive.
