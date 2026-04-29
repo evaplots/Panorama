@@ -295,13 +295,27 @@ async function main() {
   const compareArg = process.argv[3] === 'compare';
   const isComparison =
     VERSION === 'v0.5' || VERSION.endsWith('-comp') || compareArg;
-  const runs = isComparison
+
+  // Optional CLI flags:
+  //   --density=0.10      → override DEFAULTS.density for this run
+  //   --filter=name1,name2 → only run scenes whose name contains one of these substrings
+  let densityOverride = null;
+  let sceneFilter = null;
+  for (const arg of process.argv.slice(2)) {
+    if (arg.startsWith('--density=')) densityOverride = parseFloat(arg.split('=')[1]);
+    if (arg.startsWith('--filter=')) sceneFilter = arg.split('=')[1].split(',');
+  }
+
+  let runs = isComparison
     ? Object.keys(palettes).map(paletteKey => ({
         name: `${COMPARISON_SCENE.name}__${paletteKey}`,
         factory: COMPARISON_SCENE.factory,
         paletteKey,
       }))
     : SCENES;
+  if (sceneFilter) {
+    runs = runs.filter(r => sceneFilter.some(f => r.name.includes(f)));
+  }
 
   const allTimings = [];
 
@@ -317,15 +331,17 @@ async function main() {
     const srcPath = path.join(runDir, `${name}-source.png`);
     fs.writeFileSync(srcPath, src.toBuffer('image/png'));
 
-    const { canvas: stylized, timing } = await applyPointillism(src, {
+    const opts = {
       createCanvas,
       palette: palette.colors,
-      // No wind override in v0.3 — strokes follow the image gradient so
+      // No wind override in v0.3+ — strokes follow image gradient so
       // mountains, horizons, tree trunks become visible structural features.
       // Wind binding will return as a BIAS (windInfluence > 0) once real
       // weather data ships from the Weather module.
       seed: 0xC0FFEE ^ name.length,
-    });
+    };
+    if (densityOverride !== null) opts.density = densityOverride;
+    const { canvas: stylized, timing } = await applyPointillism(src, opts);
     console.log(`  pointillism: ${timing.totalMs} ms ` +
       `(gradient ${timing.gradientMs}, ${timing.strokeCount.toLocaleString()} strokes ${timing.strokesMs} ms)`);
 

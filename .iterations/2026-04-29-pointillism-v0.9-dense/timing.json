@@ -1,0 +1,50 @@
+{
+  "version": "v0.9-dense",
+  "runAt": "2026-04-29T03:11:01.606Z",
+  "resolution": {
+    "width": 4961,
+    "height": 3508,
+    "megapixels": 17.4
+  },
+  "nodeVersion": "v24.15.0",
+  "platform": "win32",
+  "scenes": [
+    {
+      "scene": "storm-seascape",
+      "palette": "Nolde — storm and unsettled sea",
+      "paletteRef": "Emil Nolde, North Sea seascapes and storm paintings",
+      "timing": {
+        "readImageDataMs": 21.8,
+        "copyUnderpaintingMs": 14.6,
+        "grayscaleMs": 42.1,
+        "gradientMs": 118.4,
+        "strokesMs": 37975.4,
+        "totalMs": 38172.2,
+        "strokeCount": 1740318,
+        "megapixels": 17.4,
+        "projectedA3Ms": 38172
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v0.9-dense\\storm-seascape-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v0.9-dense\\storm-seascape-pointillism.png"
+    },
+    {
+      "scene": "mountain-twilight",
+      "palette": "Whistler — nocturne",
+      "paletteRef": "James McNeill Whistler, Nocturnes (Battersea Bridge, Black and Gold, Blue and Silver)",
+      "timing": {
+        "readImageDataMs": 31.3,
+        "copyUnderpaintingMs": 14.8,
+        "grayscaleMs": 42.6,
+        "gradientMs": 115.8,
+        "strokesMs": 28620.6,
+        "totalMs": 28825.1,
+        "strokeCount": 1740318,
+        "megapixels": 17.4,
+        "projectedA3Ms": 28825
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v0.9-dense\\mountain-twilight-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v0.9-dense\\mountain-twilight-pointillism.png"
+    }
+  ],
+  "averageTotalMs": 33499
+}
