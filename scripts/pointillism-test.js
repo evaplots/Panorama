@@ -677,6 +677,7 @@ async function main() {
     if (arg === '--no-median') optsOverride.applyMedianUnderpaint = false;
     if (arg === '--no-smooth') optsOverride.smoothGradientField = false;
     if (arg === '--no-extend') optsOverride.extendPalette = false;
+    if (arg === '--manual-raster') optsOverride.manualRaster = true;
   }
 
   let runs = isComparison

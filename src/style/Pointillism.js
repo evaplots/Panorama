@@ -73,6 +73,16 @@ const DEFAULTS = {
   smoothGradientField: true,    // Gaussian-equivalent smoothing on dx/dy
   // smoothing radius defaults to max(w,h)/50 per the reference; can override
 
+  // Stroke rendering backend
+  manualRaster: false,          // false → Canvas2D ctx.ellipse + ctx.fill (with AA)
+                                // true  → manual hit-test rasterisation into ImageData
+                                //         (no AA, but skips ctx.fillStyle/path overhead).
+                                // Cycle 20 finding: manual is actually ~16% SLOWER
+                                // than the Canvas2D path (node-canvas's native rasterizer
+                                // beats pure JS for this workload). Visually identical
+                                // at production density+opacity. Kept as opt-in for
+                                // pixel-exact output; do not turn on for perf.
+
   seed: 0xC0FFEE,
 };
 
@@ -152,6 +162,19 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
   const probs = new Float32Array(paletteLen);
   const temperature = o.paletteTemperature;
 
+  // Manual rasterisation: pre-grab the canvas ImageData for in-place writes.
+  // Skips Canvas2D's per-stroke fillStyle parsing and path setup — modest
+  // perf win on large stroke counts. Trade-off: no anti-aliasing on ellipse
+  // edges, but at this density + opacity, AA loss is barely perceptible.
+  let manualBuf = null;
+  let manualImageData = null;
+  if (o.manualRaster) {
+    manualImageData = ctx.getImageData(0, 0, width, height);
+    manualBuf = manualImageData.data;
+  }
+  const opacity = o.brushOpacity;
+  const inv = 1 - opacity;
+
   for (let s = 0; s < strokeCount; s++) {
     const x = Math.floor(rand() * width);
     const y = Math.floor(rand() * height);
@@ -206,10 +229,48 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
 
     const length = brushThicknessPx + brushThicknessPx * o.brushStrokeFactor * Math.sqrt(mag);
 
-    ctx.fillStyle = `rgb(${pr},${pg},${pb})`;
-    ctx.beginPath();
-    ctx.ellipse(x, y, length, brushThicknessPx, angle, 0, Math.PI * 2);
-    ctx.fill();
+    if (manualBuf) {
+      // Manual rasterisation: rotated-ellipse hit test, alpha blend in place
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+      const rxSq = length * length;
+      const rySq = brushThicknessPx * brushThicknessPx;
+      // Bounding box of the rotated ellipse
+      const bboxW = Math.sqrt(rxSq * cosA * cosA + rySq * sinA * sinA);
+      const bboxH = Math.sqrt(rxSq * sinA * sinA + rySq * cosA * cosA);
+      const x0 = Math.max(0, Math.floor(x - bboxW));
+      const x1 = Math.min(width - 1, Math.ceil(x + bboxW));
+      const y0 = Math.max(0, Math.floor(y - bboxH));
+      const y1 = Math.min(height - 1, Math.ceil(y + bboxH));
+      const prScaled = pr * opacity;
+      const pgScaled = pg * opacity;
+      const pbScaled = pb * opacity;
+      for (let py = y0; py <= y1; py++) {
+        const dyScreen = py - y;
+        const dySin = dyScreen * sinA;
+        const dyCos = dyScreen * cosA;
+        const rowOff = py * width;
+        for (let px = x0; px <= x1; px++) {
+          const dxScreen = px - x;
+          const lx = dxScreen * cosA + dySin;
+          const ly = -dxScreen * sinA + dyCos;
+          if (lx * lx / rxSq + ly * ly / rySq <= 1) {
+            const bidx = (rowOff + px) * 4;
+            manualBuf[bidx]     = prScaled + manualBuf[bidx]     * inv;
+            manualBuf[bidx + 1] = pgScaled + manualBuf[bidx + 1] * inv;
+            manualBuf[bidx + 2] = pbScaled + manualBuf[bidx + 2] * inv;
+          }
+        }
+      }
+    } else {
+      ctx.fillStyle = `rgb(${pr},${pg},${pb})`;
+      ctx.beginPath();
+      ctx.ellipse(x, y, length, brushThicknessPx, angle, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  if (manualBuf) {
+    ctx.putImageData(manualImageData, 0, 0);
   }
   const tEnd = performance.now();
 

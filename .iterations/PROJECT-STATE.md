@@ -151,11 +151,10 @@ node scripts/pointillism-test.js <version> [compare] [flags...]
 
 ## Active queue (in order; pick top item that's not blocked)
 
-1. **Manual ImageData ellipse rasterisation perf optim.** Stroke loop is the
-   new bottleneck after median was optimised. Replace `ctx.beginPath +
-   ctx.ellipse + ctx.fill` (~5 µs/stroke overhead) with manual pixel writes
-   into ImageData using the rotated-ellipse rasterisation formula. Plausibly
-   2–3× speedup on the stroke pass; would unlock expressionist-mode-as-PASS.
+1. ~~**Manual ImageData ellipse rasterisation perf optim.**~~ ✗ Tried in
+   cycle 20 — ~16% SLOWER than canvas-API (node-canvas's native rasterizer
+   beats pure-JS hit-test for this workload). Implemented behind
+   `--manual-raster` flag as documented opt-in; do not turn on for perf.
 2. **Tighter best-of gallery curation.** v1.3-expressionist outputs uniformly
    crossed the museum bar. The current best-of-6 mixes modes; a v1.3-only
    composite might be a stronger pitch. Could rebuild via
