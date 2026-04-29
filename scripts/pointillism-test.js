@@ -163,11 +163,118 @@ function makeForestNoon(w, h) {
   return c;
 }
 
-// Standard scene-palette pairings (used for all versions except v0.5).
+function makeStormSeascape(w, h) {
+  // Dramatic stormy sea, low menacing sky, breaking wave crests.
+  const c = createCanvas(w, h);
+  const ctx = c.getContext('2d');
+  // Sky: heavy clouds with one tear of warm light
+  const sky = ctx.createLinearGradient(0, 0, 0, h * 0.55);
+  sky.addColorStop(0.0, '#3a3848');
+  sky.addColorStop(0.4, '#504050');
+  sky.addColorStop(0.55, '#a86848');
+  sky.addColorStop(0.7, '#604055');
+  sky.addColorStop(1.0, '#2a2838');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, w, h * 0.55);
+
+  // Sea: deep teal-violet roll
+  const sea = ctx.createLinearGradient(0, h * 0.55, 0, h);
+  sea.addColorStop(0, '#2a3050');
+  sea.addColorStop(0.5, '#101830');
+  sea.addColorStop(1, '#050810');
+  ctx.fillStyle = sea;
+  ctx.fillRect(0, h * 0.55, w, h * 0.45);
+
+  // Wave crests as horizontal foam streaks
+  for (let i = 0; i < 1200; i++) {
+    const x = Math.random() * w;
+    const y = h * (0.56 + Math.random() * 0.40);
+    const len = 40 + Math.random() * 200;
+    const a = 0.10 + Math.random() * 0.25;
+    ctx.fillStyle = `rgba(220, 215, 230, ${a})`;
+    ctx.fillRect(x, y, len, 2 + Math.random() * 4);
+  }
+  // Diagonal rain hatching
+  ctx.strokeStyle = 'rgba(180, 190, 210, 0.15)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 800; i++) {
+    const x = Math.random() * w;
+    const y = Math.random() * h * 0.7;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + 30, y + 90);
+    ctx.stroke();
+  }
+  return c;
+}
+
+function makeMountainTwilight(w, h) {
+  // Cool blue-hour mountain, near-monochromatic, faint warmth on snow tops.
+  const c = createCanvas(w, h);
+  const ctx = c.getContext('2d');
+  const sky = ctx.createLinearGradient(0, 0, 0, h * 0.55);
+  sky.addColorStop(0.0, '#1c2440');
+  sky.addColorStop(0.5, '#404a68');
+  sky.addColorStop(1.0, '#5a647c');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, w, h * 0.55);
+
+  // Distant range
+  ctx.fillStyle = '#28304a';
+  ctx.beginPath();
+  ctx.moveTo(0, h * 0.50);
+  for (let x = 0; x <= w; x += w / 25) {
+    const y = h * (0.48 + 0.05 * Math.sin(x * 0.0008 + 1.3));
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(w, h * 0.55);
+  ctx.lineTo(0, h * 0.55);
+  ctx.closePath();
+  ctx.fill();
+
+  // Closer range with pale snow caps
+  const peaks = [
+    [w * 0.05, 0.62, 0.40], [w * 0.18, 0.55, 0.32], [w * 0.30, 0.66, 0.45],
+    [w * 0.45, 0.52, 0.30], [w * 0.58, 0.62, 0.42], [w * 0.72, 0.49, 0.28],
+    [w * 0.86, 0.61, 0.40], [w * 0.97, 0.55, 0.34],
+  ];
+  ctx.fillStyle = '#1a2030';
+  ctx.beginPath();
+  ctx.moveTo(0, h * 0.70);
+  for (const [px, py] of peaks) ctx.lineTo(px, h * py);
+  ctx.lineTo(w, h);
+  ctx.lineTo(0, h);
+  ctx.closePath();
+  ctx.fill();
+
+  // Snow tops with the faintest warm tone
+  ctx.fillStyle = 'rgba(220, 200, 175, 0.45)';
+  for (const [px, py, snowY] of peaks) {
+    ctx.beginPath();
+    ctx.moveTo(px - 80, h * (py + 0.04));
+    ctx.lineTo(px, h * py);
+    ctx.lineTo(px + 80, h * (py + 0.04));
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Foreground valley shadow
+  const fog = ctx.createLinearGradient(0, h * 0.78, 0, h);
+  fog.addColorStop(0, 'rgba(40, 50, 70, 0.0)');
+  fog.addColorStop(1, 'rgba(20, 25, 40, 0.7)');
+  ctx.fillStyle = fog;
+  ctx.fillRect(0, h * 0.78, w, h * 0.22);
+  return c;
+}
+
+// Standard scene-palette pairings — v0.8 expands the corpus from 3 to 5,
+// each scene paired with the painter whose palette best fits its mood.
 const SCENES = [
   { name: 'alpine-sunset', factory: makeAlpineSunset, paletteKey: 'kirchner-alpine' },
   { name: 'coastal-twilight', factory: makeCoastalTwilight, paletteKey: 'munch-sunset' },
   { name: 'forest-noon', factory: makeForestNoon, paletteKey: 'soutine-landscape' },
+  { name: 'storm-seascape', factory: makeStormSeascape, paletteKey: 'nolde-storm' },
+  { name: 'mountain-twilight', factory: makeMountainTwilight, paletteKey: 'whistler-nocturne' },
 ];
 
 // v0.5 palette-comparison: ONE source scene, ALL palettes.
