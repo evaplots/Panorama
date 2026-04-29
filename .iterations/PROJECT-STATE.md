@@ -45,17 +45,19 @@ Phase 2.5 = pointillism transform; what this whole iteration is delivering.
 **Perf at A3 @ 300 DPI:** 26.4 s avg across 5 test scenes (PASS, well under
 the 30 s user-tolerance bar with comfortable headroom).
 
-**Opt-in expressionist mode (`v1.3-expressionist-comp`):** layers
-`--curated --no-median --width-mm=2.0 --brush-stroke=3.0 --density=0.025`
-on top. Curated painter palette instead of source extraction; skip the
-median underpainting; bigger strokes. Verified to produce museum-bar
-output across all 7 curated palettes on alpine-sunset.
+**Opt-in expressionist mode — recommended preset (`v1.4-mid-stroke`):** layers
+`--curated --no-median --width-mm=1.2 --brush-stroke=2.0 --density=0.03` on
+top. Curated painter palette instead of source extraction; skip the median
+underpainting; mid-range strokes that have impasto presence without
+overpainting the source. **22.7 s avg — PASS.** Verified across all 5 test
+scenes; storm seascape, mountain twilight, and forest noon all read as
+genuine museum-bar work. This is the recommended setting when expressionist
+character is wanted.
 
-**Perf at A3 @ 300 DPI:** 39.6 s avg in expressionist mode (BORDERLINE — under
-60 s but slow enough that a progress UI is mandatory). The 2 mm stroke width
-makes ellipse fill ~9× more expensive than the 0.7 mm default; a manual
-ImageData ellipse rasteriser in the next perf cycle should pull this back to
-PASS.
+**Heavy expressionist mode (`v1.3-expressionist-comp`):** same family but
+with `--width-mm=2.0 --brush-stroke=3.0 --density=0.025`. **39.6 s avg —
+BORDERLINE.** Bigger, gestural strokes; suited to the most painterly outputs
+but slow. v1.4 is preferred unless you specifically want the heavier impasto.
 
 ---
 
@@ -130,6 +132,7 @@ node scripts/pointillism-test.js <version> [compare] [flags...]
 | v1.2 (fast median)  | 26.4 s   | Huang's algorithm; back into PASS                              |
 | v1.3-expressionist  | 39.6 s   | Curated × 7 palettes in expressionist mode — museum bar reached |
 | best-of gallery     | n/a      | 3×2 A3 composite of strongest outputs across all iterations    |
+| v1.4-mid-stroke     | 22.7 s   | width-mm=1.2 sweet spot — museum-bar AT PASS perf              |
 
 ---
 
@@ -144,9 +147,9 @@ node scripts/pointillism-test.js <version> [compare] [flags...]
    crossed the museum bar. The current best-of-6 mixes modes; a v1.3-only
    composite might be a stronger pitch. Could rebuild via
    `scripts/build-gallery.js` with different picks.
-3. **Explore mid-range stroke width.** Sweet spot finding: try 1.0–1.4 mm
-   (between v1.2's 0.7 mm and v1.3-expressionist's 2.0 mm) to see if
-   museum-bar output is achievable at a wall-clock that stays in PASS.
+3. ~~**Explore mid-range stroke width.**~~ ✅ Done in cycle 11 — v1.4 at
+   1.2 mm landed museum-bar at PASS perf. Now the recommended expressionist
+   preset.
 4. **More curated palettes.** Klimt golden, Schiele linear, Macke Tunisian,
    Hokusai snow could round out the emotional registers.
 5. **Real-render integration.** All current testing is on synthetic canvas
