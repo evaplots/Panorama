@@ -16,9 +16,6 @@ const ITER = path.join(ROOT, '.iterations');
 
 const A3_W = 4961;
 const A3_H = 3508;
-const COLS = 3;
-const ROWS = 2;
-const CAPTION_HEIGHT = 92;
 const PADDING = 18;
 
 const GALLERIES = {
@@ -55,6 +52,61 @@ const GALLERIES = {
         src: '2026-04-29-pointillism-v1.3-expressionist-comp/alpine-sunset__turner-fog-pointillism.png',
         title: 'Turner — fog and atmosphere',
         sub: 'cream and pink dissolving into haze',
+      },
+    ],
+  },
+  // 3×3 nine-painter showcase using v1.4 settings on the alpine-sunset source
+  // (one source × all 9 curated palettes — same algorithm, palette is the variable).
+  'v1.4-nine-painters': {
+    headline: 'Panorama v1.4 — nine painters, one source (Alpine sunset)',
+    cols: 3,
+    rows: 3,
+    captionHeight: 84,
+    picks: [
+      {
+        src: '2026-04-29-pointillism-v1.5-palette-comp/alpine-sunset__nolde-storm-pointillism.png',
+        title: 'Nolde — storm',
+        sub: 'blood-orange horizon over violet sea',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.5-palette-comp/alpine-sunset__munch-sunset-pointillism.png',
+        title: 'Munch — anxious sunset',
+        sub: 'complementary tensions, charged sky',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.5-palette-comp/alpine-sunset__kirchner-alpine-pointillism.png',
+        title: 'Kirchner — alpine cool',
+        sub: 'ultramarine vs cadmium tensions',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.5-palette-comp/alpine-sunset__soutine-landscape-pointillism.png',
+        title: 'Soutine — gestural earth',
+        sub: 'visceral umbers and sour greens',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.5-palette-comp/alpine-sunset__marc-symbolic-pointillism.png',
+        title: 'Marc — primary symbolism',
+        sub: 'Der Blaue Reiter saturated triad',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.5-palette-comp/alpine-sunset__whistler-nocturne-pointillism.png',
+        title: 'Whistler — nocturne',
+        sub: 'whisper-quiet gold on blue',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.5-palette-comp/alpine-sunset__turner-fog-pointillism.png',
+        title: 'Turner — fog and atmosphere',
+        sub: 'cream and pink dissolving into haze',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.6-palette-comp/alpine-sunset__klimt-golden-pointillism.png',
+        title: 'Klimt — golden / ornamental',
+        sub: 'gold leaf, jewel-tone emerald, rose',
+      },
+      {
+        src: '2026-04-29-pointillism-v1.6-palette-comp/alpine-sunset__macke-tunisian-pointillism.png',
+        title: 'Macke — Tunisian sun',
+        sub: 'bright Mediterranean orange and blue',
       },
     ],
   },
@@ -112,6 +164,10 @@ async function main() {
   const outDir = path.join(ITER, outDirName);
   fs.mkdirSync(outDir, { recursive: true });
 
+  const COLS = GALLERY.cols ?? 3;
+  const ROWS = GALLERY.rows ?? 2;
+  const CAPTION_HEIGHT = GALLERY.captionHeight ?? 92;
+
   const canvas = createCanvas(A3_W, A3_H);
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#141014';
@@ -148,17 +204,19 @@ async function main() {
     ctx.drawImage(img, dx, dy, drawW, drawH);
     ctx.restore();
 
-    // Caption strip
+    // Caption strip — font sizes scale slightly with caption height
     const capY = y + imgH;
     ctx.fillStyle = '#1d181c';
     ctx.fillRect(x, capY, cellW, CAPTION_HEIGHT);
     ctx.fillStyle = '#f3eee6';
-    ctx.font = 'bold 30px serif';
+    const titleSize = Math.max(20, Math.round(CAPTION_HEIGHT * 0.32));
+    const subSize = Math.max(15, Math.round(CAPTION_HEIGHT * 0.24));
+    ctx.font = `bold ${titleSize}px serif`;
     ctx.textBaseline = 'top';
-    ctx.fillText(pick.title, x + 18, capY + 14);
+    ctx.fillText(pick.title, x + 18, capY + 12);
     ctx.fillStyle = '#a89e8d';
-    ctx.font = '22px serif';
-    ctx.fillText(pick.sub, x + 18, capY + 50);
+    ctx.font = `${subSize}px serif`;
+    ctx.fillText(pick.sub, x + 18, capY + 16 + titleSize + 4);
 
     console.log(`  cell ${i + 1}/${PICKS.length}: ${pick.title}`);
   }

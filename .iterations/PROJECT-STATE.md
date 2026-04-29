@@ -61,19 +61,21 @@ but slow. v1.4 is preferred unless you specifically want the heavier impasto.
 
 ---
 
-## Curated palette set (7 painters — opt-in)
+## Curated palette set (9 painters — opt-in)
 
 In `src/style/palettes.json`, available via `--curated` in the test harness:
 
-| Key                 | Painter      | Mood                              |
-| ------------------- | ------------ | --------------------------------- |
-| `munch-sunset`      | Edvard Munch | sunset / anxious                  |
-| `kirchner-alpine`   | E. L. Kirchner | alpine cool                     |
-| `soutine-landscape` | Chaïm Soutine | distorted earth                  |
-| `whistler-nocturne` | J. M. Whistler | quiet tonal nocturne            |
-| `turner-fog`        | J. M. W. Turner | atmospheric haze              |
-| `marc-symbolic`     | Franz Marc   | Der Blaue Reiter primary tensions |
-| `nolde-storm`       | Emil Nolde   | storm / unsettled sea             |
+| Key                 | Painter         | Mood                              |
+| ------------------- | --------------- | --------------------------------- |
+| `munch-sunset`      | Edvard Munch    | sunset / anxious                  |
+| `kirchner-alpine`   | E. L. Kirchner  | alpine cool                       |
+| `soutine-landscape` | Chaïm Soutine   | distorted earth                   |
+| `whistler-nocturne` | J. M. Whistler  | quiet tonal nocturne              |
+| `turner-fog`        | J. M. W. Turner | atmospheric haze                  |
+| `marc-symbolic`     | Franz Marc      | Der Blaue Reiter primary tensions |
+| `nolde-storm`       | Emil Nolde      | storm / unsettled sea             |
+| `klimt-golden`      | Gustav Klimt    | golden / ornamental jewel-tone    |
+| `macke-tunisian`    | August Macke    | Tunisian sun-drenched             |
 
 ---
 
