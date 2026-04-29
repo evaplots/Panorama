@@ -1,0 +1,97 @@
+{
+  "munch-sunset": {
+    "name": "Munch — sunset / anxious",
+    "reference": "Edvard Munch, sunset and twilight works",
+    "description": "Vivid complementary tensions; reds vs greens, yellows vs deep purples. Designed for warm-hour expressionist landscapes.",
+    "colors": [
+      [255, 218, 120],
+      [240, 158, 60],
+      [220, 90, 70],
+      [180, 50, 90],
+      [120, 40, 100],
+      [70, 50, 130],
+      [40, 40, 80],
+      [200, 220, 130],
+      [120, 160, 80],
+      [60, 100, 70],
+      [240, 240, 220],
+      [20, 20, 30]
+    ]
+  },
+  "kirchner-alpine": {
+    "name": "Kirchner — alpine cool",
+    "reference": "Ernst Ludwig Kirchner, Davos and Swiss alpine paintings",
+    "description": "Ultramarine vs cadmium tensions; cool shadows with sharp warm highlights. Suited to cool-hour mountain scenes.",
+    "colors": [
+      [40, 70, 160],
+      [60, 130, 200],
+      [120, 180, 220],
+      [220, 240, 240],
+      [250, 200, 100],
+      [240, 130, 60],
+      [200, 80, 80],
+      [80, 130, 90],
+      [40, 70, 50],
+      [180, 160, 130],
+      [80, 60, 80],
+      [20, 30, 50]
+    ]
+  },
+  "soutine-landscape": {
+    "name": "Soutine — distorted landscape",
+    "reference": "Chaïm Soutine, Céret and Cagnes landscapes",
+    "description": "Earthy umbers, blood-reds, sour greens, ochre highlights. For visceral, gestural landscape moods.",
+    "colors": [
+      [180, 60, 40],
+      [220, 130, 60],
+      [240, 200, 100],
+      [120, 100, 50],
+      [80, 60, 30],
+      [60, 90, 50],
+      [120, 140, 70],
+      [200, 220, 180],
+      [40, 30, 25],
+      [160, 80, 60],
+      [100, 50, 50],
+      [240, 230, 210]
+    ]
+  },
+  "whistler-nocturne": {
+    "name": "Whistler — nocturne",
+    "reference": "James McNeill Whistler, Nocturnes (Battersea Bridge, Black and Gold, Blue and Silver)",
+    "description": "Deep blue-greys with whisper-soft gold accents. Smoky midtones; near-monochromatic mood. For night scenes, twilight harbours, low-light architecture.",
+    "colors": [
+      [20, 30, 50],
+      [35, 50, 75],
+      [55, 70, 95],
+      [80, 95, 115],
+      [110, 120, 135],
+      [150, 155, 165],
+      [190, 180, 150],
+      [220, 200, 130],
+      [180, 150, 90],
+      [120, 95, 50],
+      [60, 50, 30],
+      [10, 15, 25]
+    ]
+  },
+  "turner-fog": {
+    "name": "Turner — fog and atmosphere",
+    "reference": "J.M.W. Turner, late seascapes and Norham Castle",
+    "description": "Hazy luminous whites and cream-yellows dissolving into faint pinks and greys. Edges blur, sun glows. For overcast, foggy, dawn-mist conditions.",
+    "colors": [
+      [245, 240, 220],
+      [230, 220, 195],
+      [255, 220, 180],
+      [240, 200, 165],
+      [210, 180, 165],
+      [180, 170, 160],
+      [150, 155, 160],
+      [120, 130, 140],
+      [200, 175, 145],
+      [240, 210, 165],
+      [250, 230, 200],
+      [220, 215, 205]
+    ]
+  }
+}

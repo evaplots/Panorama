@@ -1,0 +1,68 @@
+{
+  "version": "v0.3",
+  "runAt": "2026-04-29T01:08:40.110Z",
+  "resolution": {
+    "width": 4961,
+    "height": 3508,
+    "megapixels": 17.4
+  },
+  "nodeVersion": "v24.15.0",
+  "platform": "win32",
+  "scenes": [
+    {
+      "scene": "alpine-sunset",
+      "palette": "Kirchner — alpine cool",
+      "paletteRef": "Ernst Ludwig Kirchner, Davos and Swiss alpine paintings",
+      "timing": {
+        "readImageDataMs": 22.8,
+        "copyUnderpaintingMs": 13.7,
+        "grayscaleMs": 41.1,
+        "gradientMs": 119.9,
+        "strokesMs": 20267.2,
+        "totalMs": 20464.8,
+        "strokeCount": 783143,
+        "megapixels": 17.4,
+        "projectedA3Ms": 20465
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v0.3\\alpine-sunset-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v0.3\\alpine-sunset-pointillism.png"
+    },
+    {
+      "scene": "coastal-twilight",
+      "palette": "Munch — sunset / anxious",
+      "paletteRef": "Edvard Munch, sunset and twilight works",
+      "timing": {
+        "readImageDataMs": 22.4,
+        "copyUnderpaintingMs": 15.2,
+        "grayscaleMs": 42.8,
+        "gradientMs": 115.5,
+        "strokesMs": 12605.7,
+        "totalMs": 12801.5,
+        "strokeCount": 783143,
+        "megapixels": 17.4,
+        "projectedA3Ms": 12802
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v0.3\\coastal-twilight-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v0.3\\coastal-twilight-pointillism.png"
+    },
+    {
+      "scene": "forest-noon",
+      "palette": "Soutine — distorted landscape",
+      "paletteRef": "Chaïm Soutine, Céret and Cagnes landscapes",
+      "timing": {
+        "readImageDataMs": 20.7,
+        "copyUnderpaintingMs": 14.2,
+        "grayscaleMs": 42.3,
+        "gradientMs": 127.4,
+        "strokesMs": 13814.4,
+        "totalMs": 14019,
+        "strokeCount": 783143,
+        "megapixels": 17.4,
+        "projectedA3Ms": 14019
+      },
+      "sourcePath": ".iterations\\2026-04-29-pointillism-v0.3\\forest-noon-source.png",
+      "outputPath": ".iterations\\2026-04-29-pointillism-v0.3\\forest-noon-pointillism.png"
+    }
+  ],
+  "averageTotalMs": 15762
+}
