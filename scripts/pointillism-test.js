@@ -624,7 +624,9 @@ const SCENES = [
 
 // v0.5 palette-comparison: ONE source scene, ALL palettes.
 // Demonstrates that palette alone changes emotional content of the painting.
-const COMPARISON_SCENE = { name: 'alpine-sunset', factory: makeAlpineSunset };
+// Default source is alpine-sunset; --comp-scene=NAME overrides at runtime
+// (uses any name from SCENES; lookup happens after SCENES is declared above).
+const COMPARISON_SCENE_DEFAULT_NAME = 'alpine-sunset';
 
 async function main() {
   const runDir = path.join(ROOT, '.iterations', `2026-04-29-pointillism-${VERSION}`);
@@ -679,6 +681,16 @@ async function main() {
     if (arg === '--no-extend') optsOverride.extendPalette = false;
     if (arg === '--manual-raster') optsOverride.manualRaster = true;
   }
+  let compSceneName = COMPARISON_SCENE_DEFAULT_NAME;
+  for (const arg of process.argv.slice(2)) {
+    if (arg.startsWith('--comp-scene=')) compSceneName = arg.split('=')[1];
+  }
+  const compScene = SCENES.find(s => s.name === compSceneName);
+  if (!compScene) {
+    console.error(`--comp-scene: no scene named "${compSceneName}"`);
+    process.exit(1);
+  }
+  const COMPARISON_SCENE = { name: compScene.name, factory: compScene.factory };
 
   let runs = isComparison
     ? Object.keys(palettes).map(paletteKey => ({
