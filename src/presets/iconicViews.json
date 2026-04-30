@@ -1,0 +1,110 @@
+[
+  {
+    "slug": "mont-blanc-aiguille-du-midi",
+    "name": "Mont Blanc from Aiguille du Midi",
+    "region": "France",
+    "observer": { "lat": 45.8786, "lon": 6.8873, "eyeHeightM": 1.7 },
+    "view": { "azimuthDeg": 200, "fovDeg": 55 },
+    "recommended": { "hour": 8, "month": 7 },
+    "blurb": "The Alps' rooftop seen from the cable-car deck — Mont Blanc dome rising over the Vallée Blanche."
+  },
+  {
+    "slug": "half-dome-glacier-point",
+    "name": "Half Dome from Glacier Point",
+    "region": "Yosemite, USA",
+    "observer": { "lat": 37.7299, "lon": -119.5734, "eyeHeightM": 1.7 },
+    "view": { "azimuthDeg": 65, "fovDeg": 60 },
+    "recommended": { "hour": 19, "month": 8 },
+    "blurb": "Alpenglow on Half Dome's sheer face from the granite balcony above the valley."
+  },
+  {
+    "slug": "fuji-kawaguchi",
+    "name": "Mount Fuji from Lake Kawaguchi",
+    "region": "Japan",
+    "observer": { "lat": 35.5172, "lon": 138.7531, "eyeHeightM": 1.7 },
+    "view": { "azimuthDeg": 178, "fovDeg": 50 },
+    "recommended": { "hour": 6, "month": 11 },
+    "blurb": "Reflected Fuji at first light, snow-capped above a still lake."
+  },
+  {
+    "slug": "matterhorn-zermatt",
+    "name": "Matterhorn from Zermatt",
+    "region": "Switzerland",
+    "observer": { "lat": 46.0207, "lon": 7.7491, "eyeHeightM": 1.7 },
+    "view": { "azimuthDeg": 210, "fovDeg": 50 },
+    "recommended": { "hour": 7, "month": 9 },
+    "blurb": "The pyramid of the Matterhorn lit by sunrise above the Mattertal."
+  },
+  {
+    "slug": "trolltunga",
+    "name": "Trolltunga over Ringedalsvatnet",
+    "region": "Norway",
+    "observer": { "lat": 60.1241, "lon": 6.7404, "eyeHeightM": 1.7 },
+    "view": { "azimuthDeg": 200, "fovDeg": 75 },
+    "recommended": { "hour": 12, "month": 7 },
+    "blurb": "Granite tongue jutting 700 m above the fjord-lake."
+  },
+  {
+    "slug": "oia-santorini",
+    "name": "Oia at sunset",
+    "region": "Santorini, Greece",
+    "observer": { "lat": 36.4615, "lon": 25.3756, "eyeHeightM": 1.7 },
+    "view": { "azimuthDeg": 295, "fovDeg": 65 },
+    "recommended": { "hour": 20, "month": 7 },
+    "blurb": "White cubes tumbling toward a caldera sunset over the Aegean."
+  },
+  {
+    "slug": "cliffs-of-moher",
+    "name": "Cliffs of Moher",
+    "region": "Ireland",
+    "observer": { "lat": 52.9728, "lon": -9.4309, "eyeHeightM": 1.7 },
+    "view": { "azimuthDeg": 200, "fovDeg": 70 },
+    "recommended": { "hour": 19, "month": 6 },
+    "blurb": "Two hundred metres of vertical Atlantic shoreline beneath O'Brien's Tower."
+  },
+  {
+    "slug": "bixby-big-sur",
+    "name": "Bixby Bridge, Big Sur",
+    "region": "California, USA",
+    "observer": { "lat": 36.3713, "lon": -121.9027, "eyeHeightM": 1.7 },
+    "view": { "azimuthDeg": 10, "fovDeg": 65 },
+    "recommended": { "hour": 18, "month": 9 },
+    "blurb": "The arched span carries Highway 1 across a canyon mouth where the Pacific meets the Santa Lucias."
+  },
+  {
+    "slug": "horseshoe-bend",
+    "name": "Horseshoe Bend",
+    "region": "Arizona, USA",
+    "observer": { "lat": 36.8791, "lon": -111.5104, "eyeHeightM": 1.7 },
+    "view": { "azimuthDeg": 210, "fovDeg": 75 },
+    "recommended": { "hour": 11, "month": 5 },
+    "blurb": "The Colorado River carved a perfect U through the Navajo Sandstone."
+  },
+  {
+    "slug": "uluru-sunset",
+    "name": "Uluru at sunset",
+    "region": "Northern Territory, Australia",
+    "observer": { "lat": -25.3445, "lon": 131.0080, "eyeHeightM": 1.7 },
+    "view": { "azimuthDeg": 95, "fovDeg": 55 },
+    "recommended": { "hour": 19, "month": 6 },
+    "blurb": "The monolith glowing molten red as the desert sun drops behind the viewer."
+  },
+  {
+    "slug": "bagan-sunset",
+    "name": "Bagan at sunset",
+    "region": "Myanmar",
+    "observer": { "lat": 21.1717, "lon": 94.8682, "eyeHeightM": 1.7 },
+    "view": { "azimuthDeg": 260, "fovDeg": 70 },
+    "recommended": { "hour": 18, "month": 1 },
+    "blurb": "Two thousand pagodas silhouetted on the dry plain as the sun drops over the Irrawaddy."
+  },
+  {
+    "slug": "plitvice-lakes",
+    "name": "Plitvice Lakes",
+    "region": "Croatia",
+    "observer": { "lat": 44.8654, "lon": 15.6116, "eyeHeightM": 1.7 },
+    "view": { "azimuthDeg": 225, "fovDeg": 65 },
+    "recommended": { "hour": 11, "month": 6 },
+    "blurb": "Travertine terraces stair-step down through dense beech forest, every basin a different blue."
+  }
+]

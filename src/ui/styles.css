@@ -220,6 +220,62 @@ input[type="text"]:focus, input[type="number"]:focus {
   margin-top: 4px;
 }
 
+/* ── Iconic view gallery ── */
+.pano-iconic-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.pano-iconic-strip::-webkit-scrollbar { width: 3px; }
+.pano-iconic-strip::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,.18);
+  border-radius: 2px;
+}
+
+.pano-iconic-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: rgba(255,255,255,.04);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 7px 9px;
+  color: var(--fg);
+  cursor: pointer;
+  font: inherit;
+  transition: background .15s, border-color .15s;
+}
+.pano-iconic-card:hover {
+  background: rgba(224,123,57,.16);
+  border-color: var(--accent);
+}
+.pano-iconic-card.active {
+  background: rgba(224,123,57,.22);
+  border-color: var(--accent);
+}
+
+.pano-iconic-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1.25;
+}
+.pano-iconic-region {
+  font-size: 10px;
+  color: var(--accent2);
+  margin-top: 2px;
+  letter-spacing: .04em;
+}
+.pano-iconic-blurb {
+  font-size: 11px;
+  color: rgba(255,255,255,.55);
+  line-height: 1.35;
+  margin-top: 4px;
+}
+
 /* ── Preset selector ── */
 .pano-preset-row {
   display: flex;

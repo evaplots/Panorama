@@ -160,10 +160,20 @@ export function createTimeSlider(container) {
   const onLocation = () => { refreshLocation(); applySlider(); };
   state.on('location:changed', onLocation);
 
-  // Sync follow-sun checkbox if camera disables it via state.set
+  // React to external time changes (e.g., preset load) by syncing the
+  // slider position and follow-sun checkbox. `suppress` skips the echo
+  // from our own applySlider() write.
   const onTime = timeObj => {
-    if (timeObj && followCb.checked !== timeObj.followSun) {
+    if (!timeObj || suppress) return;
+    if (followCb.checked !== timeObj.followSun) {
       followCb.checked = timeObj.followSun;
+    }
+    if (tz && timeObj.timestamp instanceof Date) {
+      const m = minuteOfDayInTz(timeObj.timestamp, tz);
+      if (Number.isFinite(m) && Number(slider.value) !== m) {
+        slider.value = String(m);
+        readout.textContent = fmtTimeInTz(timeObj.timestamp, tz);
+      }
     }
   };
   state.on('time:changed', onTime);
