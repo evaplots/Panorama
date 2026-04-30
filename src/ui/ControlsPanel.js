@@ -1,5 +1,6 @@
 import { createLocationPicker } from './LocationPicker.js';
 import { createMapPicker } from './MapPicker.js';
+import { createIconicViewGallery } from './IconicViewGallery.js';
 import { createPresetSelector } from './PresetSelector.js';
 import { createTimeSlider } from './TimeSlider.js';
 import { createModeToggle } from './ModeToggle.js';
@@ -15,6 +16,7 @@ export const ControlsPanel = {
     // Sub-components (return cleanup fns but we don't need them for Phase 1)
     createMapPicker(sidebar);
     createLocationPicker(sidebar);
+    createIconicViewGallery(sidebar);
     createPresetSelector(sidebar);
     createTimeSlider(sidebar);
     createModeToggle(sidebar);
