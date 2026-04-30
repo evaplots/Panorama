@@ -1,4 +1,5 @@
 import { createLocationPicker } from './LocationPicker.js';
+import { createMapPicker } from './MapPicker.js';
 import { createPresetSelector } from './PresetSelector.js';
 import { createTimeSlider } from './TimeSlider.js';
 import { createModeToggle } from './ModeToggle.js';
@@ -12,6 +13,7 @@ export const ControlsPanel = {
     rootEl.appendChild(sidebar);
 
     // Sub-components (return cleanup fns but we don't need them for Phase 1)
+    createMapPicker(sidebar);
     createLocationPicker(sidebar);
     createPresetSelector(sidebar);
     createTimeSlider(sidebar);

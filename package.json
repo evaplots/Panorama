@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "earcut": "^3.0.2",
+    "leaflet": "^1.9.4",
     "suncalc": "^1.9.0",
     "three": "^0.175.0",
     "tz-lookup": "^6.1.25"
