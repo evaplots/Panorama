@@ -120,6 +120,17 @@ const DEFAULTS = {
   waterSunGlitterEnabled: true,
   waterRippleDensity: 0.4,
 
+  // Atmospheric depth post-passes (Phase 5 polish) — three painterly
+  // post-passes that run after the median-blur softening: haze, sun
+  // bloom, grain + global colour grading. Surfaced by PainterParamsPanel
+  // as state.painter.atmospherics.*. Defaults match the panel defaults;
+  // `atmosphericsEnabled: false` is the regression-guard path (skip the
+  // orchestrator entirely → byte-identical to pre-PR).
+  atmosphericsEnabled: true,
+  hazeStrength: 0.5,
+  bloomStrength: 0.4,
+  grainAmount: 0.15,
+
   // Gradient smoothing
   smoothGradientField: true,    // Gaussian-equivalent smoothing on dx/dy
   // smoothing radius defaults to max(w,h)/50 per the reference; can override
@@ -178,6 +189,10 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
       waterReflectionStrength: o.waterReflectionStrength,
       waterSunGlitterEnabled: o.waterSunGlitterEnabled,
       waterRippleDensity: o.waterRippleDensity,
+      atmosphericsEnabled: o.atmosphericsEnabled,
+      hazeStrength: o.hazeStrength,
+      bloomStrength: o.bloomStrength,
+      grainAmount: o.grainAmount,
     },
   );
   const ctx = out.getContext('2d');
@@ -378,6 +393,13 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
     landmarkMs: underTiming.landmarkMs,
     medianMs: underTiming.medianMs,
     paintMs: underTiming.paintMs,
+    atmosphericsEnabled: underTiming.atmosphericsEnabled,
+    hazeMs: underTiming.hazeMs,
+    bloomMs: underTiming.bloomMs,
+    grainMs: underTiming.grainMs,
+    bloomFired: underTiming.bloomFired,
+    hazedPixels: underTiming.hazedPixels,
+    atmosphericsMs: underTiming.atmosphericsMs,
   };
   timing.projectedA3Ms = +(timing.totalMs * 17.4 / timing.megapixels).toFixed(0);
 

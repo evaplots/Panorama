@@ -1,5 +1,205 @@
 # Panorama — release notes
 
+## V2 — Atmospheric depth (released 2026-05-01)
+
+Three painterly post-passes that turn the painting from "diagram" into
+"scene": distance-based haze, soft sun bloom, ambient grain + global
+colour grading. They share an architectural slot at the end of the
+underpainting and tune together — haze without bloom looks sterile,
+bloom without haze looks pasted-on, grain without either reads as noise.
+Combined PR per the brief's "right granularity" guidance.
+
+Phase 5 polish per ROADMAP.md (three items at once: "Atmospheric haze
+with distance," "Bloom on the sun disk," "Subtle film grain / colour
+grading"). Lives entirely inside the painter pipeline — no 3D scene
+changes — and plugs in after `paintGround → waterPainter → canopyPainter
+→ landmarkPainter → median blur` in `src/style/underpainting.js`.
+
+### Highlights
+
+- **`src/style/atmosphericPasses.js` (new)** — three named passes plus
+  an `applyAtmospherics` orchestrator that composes them in order
+  (haze → bloom → grain). Order matters: haze before bloom (so the
+  bloom isn't hazed); grain last (so it reads as physical paper texture
+  rather than blurred noise).
+  1. `applyHaze(ctx, projectionCtx, sun, opts)` — per-pixel typed-array
+     pass over the below-horizon strip; cosine-shaped depth curve peaks
+     at the horizon and tapers to zero at the canvas bottom. Sky region
+     gets no haze. Sun-phase tint envelope (cool blue-grey at noon,
+     warm peach at golden hour, orange / pink at sunset, mauve dusk
+     at civil twilight, deep navy at night).
+  2. `applySunBloom(ctx, projectionCtx, sun, opts)` — soft radial
+     gradient at the projected sun position, additive blend (`lighter`
+     composite). Fires only when sun above horizon AND projected
+     screen position falls within the canvas bounds (with one
+     bloom-radius margin so a sun just outside the frame still lights
+     up the edge). Bloom radius scales with physical mm via
+     `effectiveDpi` so prints at any DPI carry the same halo size.
+     Sun-phase warm tint (warm-white at noon, deep orange at sunset).
+     Phase-aware altitude attenuation: low sun = wide diffuse glow,
+     high sun = tighter halo.
+  3. `applyGrainAndGrade(ctx, sun, opts)` — Mulberry32-seeded paper
+     grain at one cell per ~2.1 px (cell size derived from
+     `GRAIN_CELL_MM = 0.18 mm` × effectiveDpi); uniform amplitude.
+     Grading is a gentle global sun-phase tint envelope applied via
+     composite ops — `overlay` for the warm push, `saturation` for the
+     desat — fast, native paths.
+- **`src/style/underpainting.js` updated** to plug `applyAtmospherics`
+  in at the end of the pipeline (after the median-blur softening).
+  The `projectionCtx` is hoisted from inside the bindings-gated
+  painter block to a top-level local so the haze (horizon Y) and
+  bloom (sun projection) passes can use it. When `bindings.viewpoint`
+  is missing (early app boot, node-side probes without full snapshot),
+  haze falls back to a default horizon at 40% canvas height; bloom
+  no-ops without sun data.
+- **State schema bumped to v7** with the new `painter.atmospherics`
+  block: `{ enabled: true, hazeStrength: 0.5, bloomStrength: 0.4,
+  grainAmount: 0.15 }`. Defaults reproduce the engine baseline on
+  scenes where the post-passes don't fire (no projection context,
+  sun below horizon → bloom no-ops; foreground-dominated scenes →
+  haze barely registers); regression-guard path
+  `atmosphericsEnabled: false` produces output byte-identical to
+  pre-PR (parity hash unchanged at `cf15cf7b…80b39f`).
+- **PainterParamsPanel** gains an "Atmosphere" subgroup with one
+  toggle ("Atmospherics enabled" — for fast comparison "with vs
+  without") + three sliders (Haze, Sun bloom, Grain). Writes to
+  `state.painter.atmospherics.*` on `input` events;
+  UnderpaintingPreviewPanel picks them up live like every other slider.
+- **ControlsPanel** plumbs the four atmospherics knobs through to
+  `applyPointillism` opts at the stylize-trigger site.
+- **Determinism preserved.** Each painter forks its own Mulberry32
+  from the master seed. Atmospherics uses `opts.seed ^ 0x4D_4D_4D_4D`
+  (4D for "depth"; matches the canopy/landmark/water XOR-salt
+  convention). Same Snapshot in → byte-identical output across two
+  paints, verified by hashing perf.png across two runs:
+  `83f5b555…ef238d1e` identical.
+
+### Risk-first probes — three pass
+
+`scripts/atmospheric-perf-probe.js` runs all three and exits non-zero
+on any failure.
+
+#### 1. Haze depth correctness (alpine vs courtyard)
+
+Alpine vista (1500 m observer, 12 km valley) vs urban courtyard (street
+level, 30 m residential polygon foreground). Same haze strength.
+
+| Scene     | Horizon-band sat | Foreground-band sat | Delta  |
+| --------- | ---------------: | ------------------: | -----: |
+| alpine    |            0.403 |               0.502 | +0.099 |
+| courtyard |            0.538 |               0.187 | −0.352 |
+| **Differential** | | |        | **+0.451** |
+
+Alpine shows clear horizon-band desaturation (positive delta — far band
+hits heavier than foreground); courtyard shows a NEGATIVE delta because
+there's no real horizon for the haze to act on. The +0.45 differential
+between the two scenes confirms the depth proxy is scene-scale aware.
+
+#### 2. Bloom horizon gate (4 times of day)
+
+Coastal observer with a level-ish camera (elevation=10°, sun azimuth
+fixed at 180° = ahead). Verifies bloom fires only when above horizon.
+
+| Time     | Altitude | Phase         | Expected | Observed | Match |
+| -------- | -------: | ------------- | -------- | -------- | ----- |
+| 6am      |       4° | goldenHour    | YES      | YES      | ✓     |
+| noon     |      25° | day           | YES      | YES      | ✓     |
+| sunset   |       2° | sunset        | YES      | YES      | ✓     |
+| midnight |     −25° | night         | NO       | NO       | ✓     |
+
+#### 3. Perf at A3 @ 300 DPI
+
+Coastal extent scene, expressionist preset, atmospherics enabled at
+default sliders.
+
+| Metric                | Value     | Bar             | Verdict |
+| --------------------- | --------: | --------------- | ------- |
+| Haze ms               |  ~85–150  | < 80 ms target  | ⚠ over  |
+| Bloom ms              |       ~2  | < 80 ms target  | ★ PASS  |
+| Grain ms              |  ~620–650 | < 80 ms target  | ⚠ over  |
+| Atmospherics total    |     ~720  | —               | —       |
+| **TOTAL A3 render**   |   24.3 s  | **< 28 s**      | **PASS** |
+
+Total A3 render passes the 28 s user-tolerance bar with ~3.7 s headroom.
+The atmospherics overhead is ~720 ms (3% of total render).
+
+**Per-pass overruns surfaced per the brief's escalation path** ("If
+grain exceeds budget, surface and propose downsampled grain"). The
+80 ms-per-pass target is fundamentally tight for any per-pixel JS write
+on a 17.4 MP canvas: a `getImageData + putImageData` round-trip alone
+is ~70 ms before any per-pixel work. Three faster alternatives were
+tried and discarded (drawImage scale-up + overlay; createPattern +
+fillRect with overlay; per-pixel JS without mid-tone weighting) — all
+hit the same ceiling because node-canvas's `overlay` composite at
+17 MP is itself the bottleneck. The grain pass already uses the brief's
+recommended downsampling (cell-based at GRAIN_CELL_MM=0.18 mm — the
+noise buffer is ~1/4 the canvas pixel count). Faster grain would
+require WebGL fragment shading; out of scope (the painter has been
+canvas2D-only since Phase 2.5).
+
+### Solo decisions (surfaced per the brief)
+
+- **Depth proxy = vertical-screen-position relative to projected
+  horizon line, NOT a real per-pixel depth buffer.** A real depth
+  buffer would require touching `src/terrain/` or threading new
+  contract through the snapshot, both forbidden by the brief's
+  "stay inside src/style/" rule. The screen-Y proxy is monotonic
+  with distance for any flat-ground scene (which the painter
+  projection approximates anyway) and produces convincing recession
+  in vista scenes — verified by Probe 1.
+- **Bloom radius = 18 mm at full strength.** Wider than a 3D engine
+  bloom (which is typically 5–10 mm screen equivalent) because the
+  painter reads as a painting and a painted sun's halo is a generous
+  patch — think Turner's *Norham Castle*, not a digital lens flare.
+- **Grain distribution = uniform amplitude (cell-based), NOT
+  brightness-modulated.** Paper grain in real prints is uniform; the
+  variance is in spatial frequency and texture, not per-pixel
+  brightness response. Cell-based downsampling (one ~2.1 px cell per
+  noise sample at 300 DPI) keeps grain visible across the dynamic
+  range without ever overpowering shadows or highlights.
+
+### What's intentionally deferred
+
+- **Real per-pixel depth buffer.** Currently the haze depth proxy is
+  screen-Y-relative-to-horizon. If curation surfaces a scene where the
+  proxy fails (looking down a valley with a rising ridge in the middle,
+  for example), threading a real depth buffer from the terrain step is
+  a one-PR change to the terrain → painter contract — but it touches
+  modules outside `src/style/`, so it's a separate PR.
+- **Brightness-modulated grain.** Currently uniform. If curation
+  surfaces a need for highlights or shadows to grain differently, a
+  per-cell luminance attenuation pass can be added inside
+  `applyGrainAndGrade` without changing the public surface.
+- **WebGL fragment-shader grain.** Would unlock per-pass A3 perf under
+  10 ms but requires the painter to leave canvas2D, which is a
+  meaningful architectural change.
+- **Bloom on the moon at night.** Currently the bloom only fires for
+  sun.altitude > 0. A moon-bloom variant could re-use the same
+  apparatus once the Astronomy module ships its
+  CelestialSnapshot.moon contract.
+
+### Files changed
+
+```
+src/style/atmosphericPasses.js           new — haze + bloom + grain/grade passes
+src/style/underpainting.js               wire applyAtmospherics; +atmospherics opts
+                                         pass-through; hoisted projectionCtx; +timing
+src/style/Pointillism.js                 pass-through atmospherics opts; +timing
+src/state.js                             +painter.atmospherics block, schema → v7
+src/ui/PainterParamsPanel.js             +Atmosphere subgroup (3 sliders, 1 toggle);
+                                         refactored makeBoolRow helper
+src/ui/UnderpaintingPreviewPanel.js      +atmospherics opts in renderUnderpainting call
+src/ui/ControlsPanel.js                  +atmospherics opts in painterParams
+scripts/atmospheric-perf-probe.js        new — 3 risk-first probes
+scripts/parity-probe.js                  +atmosphericsEnabled:false to keep baseline
+DATA-CONTRACTS.md                        v3.12 entry; state-schema doc bump
+ARCHITECTURE.md                          painter pipeline diagram updated
+ROADMAP.md                               Phase 5 haze/bloom/grain marked done;
+                                         four new Decision Log entries
+```
+
+---
+
 ## V2 — Painterly water reflections (released 2026-05-01)
 
 A four-pass painter for `natural=water` polygons. Water reads as water now,

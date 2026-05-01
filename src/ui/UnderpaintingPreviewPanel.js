@@ -201,6 +201,14 @@ export function createUnderpaintingPreviewPanel(rootEl, opts = {}) {
         waterReflectionStrength: painter?.water?.reflectionStrength ?? 0.6,
         waterSunGlitterEnabled: painter?.water?.sunGlitterEnabled ?? true,
         waterRippleDensity: painter?.water?.rippleDensity ?? 0.4,
+        // Atmospheric depth knobs (Phase 5 polish) — three painterly
+        // post-passes that run after the median-blur softening. Same
+        // state path PainterParamsPanel writes to, so sliding the
+        // sliders updates the preview live.
+        atmosphericsEnabled: painter?.atmospherics?.enabled !== false,
+        hazeStrength: painter?.atmospherics?.hazeStrength ?? 0.5,
+        bloomStrength: painter?.atmospherics?.bloomStrength ?? 0.4,
+        grainAmount: painter?.atmospherics?.grainAmount ?? 0.15,
         // medianKernel intentionally falls through to renderUnderpainting's
         // default (11) so the preview shows the same softening intensity as
         // a full paint with applyMedianUnderpaint=true.

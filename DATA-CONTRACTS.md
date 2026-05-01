@@ -176,6 +176,12 @@ const state = {
       sunGlitterEnabled: true, // back-lit sun glitter on/off
       rippleDensity: 0.4,      // 0–1, horizontal surface stroke density
     },
+    atmospherics: {            // v3.12 — atmospheric depth post-passes (Phase 5)
+      enabled: true,           // global toggle; off = byte-identical to pre-PR
+      hazeStrength: 0.5,       // 0–1, distance-based desaturation toward sky tint
+      bloomStrength: 0.4,      // 0–1, soft warm halo at projected sun position
+      grainAmount: 0.15,       // 0–1, Mulberry32 paper-texture noise
+    },
   },
 
   // -------- Terrain options (V2 Step 5c) --------
@@ -683,8 +689,10 @@ v3.1–v3.6 entries below all add or revise *shared types* (StyleBindings,
 SnapshotShapes, etc.) without touching the live `state` object. Version 4
 (V2 Step 5) added the `weatherOverrides` field. Version 5 (V2 Step 5c) added
 the `painter` and `terrain` blocks. Version 6 (v3.11) adds the
-`painter.water.*` block for painterly water reflections. Bump the state
-comment only when a field is added/removed/renamed in `src/state.js`.
+`painter.water.*` block for painterly water reflections. Version 7 (v3.12)
+adds the `painter.atmospherics.*` block for the haze + bloom + grain
+post-passes. Bump the state comment only when a field is added/removed/renamed
+in `src/state.js`.
 
 When a future contributor sees their local checkout's state version doesn't match the doc, they know to read the changelog at the bottom of this file before debugging.
 
@@ -692,6 +700,97 @@ When a future contributor sees their local checkout's state version doesn't matc
 
 ## Changelog
 
+- **v3.12** — Atmospheric depth (Phase 5 polish item per ROADMAP.md —
+  haze + bloom + grain/grading). Three painterly post-passes that share
+  one architectural slot at the end of the underpainting and tune
+  together: distance-based haze, sun bloom, ambient grain + global
+  colour grading. New module file: `src/style/atmosphericPasses.js`
+  exporting `applyHaze`, `applySunBloom`, `applyGrainAndGrade` and an
+  `applyAtmospherics` orchestrator that runs them in order
+  (haze → bloom → grain). Plug point: end of `renderUnderpainting`,
+  after the median-blur softening — so the grain sits on top of the
+  fully-composed underpainting and reads as physical paper texture
+  rather than blurred noise.
+  **Haze depth proxy:** vertical-screen-position relative to the
+  projected horizon line (computed by `projection.js` `horizonY()`).
+  Pixels above the horizon get zero haze; pixels just below get the
+  strongest desaturation toward a sky-tinted colour, tapering to near-
+  zero at the canvas bottom along a cosine curve. A real per-pixel
+  depth buffer would require touching the terrain step, which the
+  brief explicitly forbade — surfaced as a Decision Log entry. The
+  screen-Y proxy naturally satisfies "haze obeys scene scale" because
+  vista scenes (alpine, coastal) project a wide far-band while close
+  scenes (urban courtyard) fill the canvas with foreground polygons;
+  Probe 1 verifies this empirically (alpine vs courtyard saturation
+  differential = +0.45).
+  **Bloom horizon gate:** fires only when sun.altitude > 0 AND the
+  sun's projected screen position falls within (or one bloom-radius
+  outside) the canvas bounds. Probe 2 verifies four times of day with
+  3-of-3 above-horizon firing and 0-of-1 below-horizon firing.
+  **Grain:** Mulberry32-seeded noise at one cell per ~2.1 px (cell size
+  derived from `GRAIN_CELL_MM = 0.18 mm` × effectiveDpi), uniform
+  amplitude. Per-cell noise stored in an `Int8Array` and applied via
+  `getImageData` + per-pixel walk + `putImageData`. Determinism: same
+  master seed → same noise pattern; the master seed is forked from
+  `opts.seed ^ 0x4D_4D_4D_4D` (4D for "depth"), matching the
+  canopy/landmark/water XOR-salt convention.
+  **State schema bumped to v7** with the new `painter.atmospherics`
+  block: `{ enabled: true, hazeStrength: 0.5, bloomStrength: 0.4,
+  grainAmount: 0.15 }`. Defaults reproduce the engine baseline on
+  scenes where the post-passes don't fire (no projection context, no
+  sun above horizon → bloom no-ops; foreground-dominated scenes →
+  haze barely registers); regression-guard path
+  `atmosphericsEnabled: false` is byte-identical to pre-PR (hash
+  unchanged at `cf15cf7b…80b39f`, same as v3.11).
+  **PainterParamsPanel** gains an "Atmosphere" subgroup with one
+  toggle ("Atmospherics enabled") + three sliders (Haze, Sun bloom,
+  Grain). Writes to `state.painter.atmospherics.*` on `input`;
+  UnderpaintingPreviewPanel picks them up live like every other
+  slider.
+  **Sun-phase tint envelope:** all three passes consume `sun.phase`
+  and apply phase-keyed tints (haze cool at noon / warm at sunset;
+  bloom warm-white at noon / deep orange at sunset; grading slight
+  warm push at golden hour / sunset, slight cool push at twilight /
+  night). Tints are local to the pass (not shared via a single
+  source-of-truth constant) because each pass uses a different shape
+  of tint envelope — surface-level duplication is cheaper than
+  cross-module coupling.
+  **mm-not-px discipline:** bloom radius (18 mm at full strength) and
+  grain cell size (0.18 mm) are sized in physical mm via
+  `effectiveDpi`, so an A3 print and an 800-px preview look
+  proportionally identical.
+  **Three probes pass** (`scripts/atmospheric-perf-probe.js`):
+  Probe 1 (haze depth scene-scale awareness): alpine differential
+  +0.099 vs courtyard −0.352, differential +0.45 → PASS.
+  Probe 2 (bloom horizon gate): 4/4 fired-vs-expected matches → PASS.
+  Probe 3 (perf at A3): total 24.3 s under 28 s bar → PASS;
+  per-pass 80 ms target met by bloom (~2 ms) but exceeded by haze
+  (~85–150 ms) and grain (~620 ms) — surfaced per the brief's
+  escalation path. The 80 ms bar is fundamentally tight for any
+  per-pixel JS pass on a 17.4 MP canvas (a getImageData +
+  putImageData round-trip alone is ~70 ms before any work). Total
+  render cost of atmospherics is ~720 ms (3 % of the 24.3 s end-to-
+  end). Grain already uses the brief-recommended cell-based downsampling;
+  faster grain would require WebGL, which is a meaningful
+  architectural shift — out of scope here.
+  **Determinism preserved:** same Snapshot in → byte-identical output
+  across two paints, verified by `scripts/atmospheric-perf-probe.js perf`
+  (SHA-256 `83f5b555…ef238d1e` identical across two runs).
+  **No new dependencies.**
+  **Verified against code on 2026-05-01:** `src/style/atmosphericPasses.js`
+  (new), `src/style/underpainting.js` (atmospherics plug-in slot +
+  hoisted projectionCtx + new opts pass-through + timing fields),
+  `src/style/Pointillism.js` (atmospherics opts pass-through + timing
+  fields), `src/state.js` (v7 schema, `painter.atmospherics` block,
+  comment bumped), `src/ui/PainterParamsPanel.js` (Atmosphere subgroup,
+  three sliders + one toggle, refactored makeBoolRow helper),
+  `src/ui/UnderpaintingPreviewPanel.js` (atmospherics opts wired
+  through), `src/ui/ControlsPanel.js` (atmospherics opts in
+  painterParams), `scripts/parity-probe.js` (added
+  `atmosphericsEnabled: false` to keep hash baseline meaningful) all
+  match this entry; `npm run build` clean (71 modules); parity-probe
+  hash unchanged (`cf15cf7b…80b39f`); new
+  `scripts/atmospheric-perf-probe.js` ships alongside the painter.
 - **v3.11** — Painterly water reflections (Phase 5 polish item per
   ROADMAP.md). New module file: `src/style/waterPainter.js`. Owns
   `natural=water` polygons end-to-end via four layered passes per polygon:

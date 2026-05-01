@@ -112,6 +112,13 @@ const bindings = {
     density: 0.03,
     applyMedianUnderpaint: false,
     seed: 0xDEADBEEF,
+    // Disable the Phase 5 atmospheric post-passes so the parity check
+    // measures the rest of the engine in isolation. The atmospheric
+    // depth PR (haze + bloom + grain) is a NEW feature; the parity hash
+    // by definition changes when the new passes run. The contract is
+    // that with `atmosphericsEnabled: false`, the output is byte-identical
+    // to pre-atmospheric-depth.
+    atmosphericsEnabled: false,
   });
   const wallMs = +(performance.now() - t0).toFixed(1);
   const buf = canvas.toBuffer('image/png');
