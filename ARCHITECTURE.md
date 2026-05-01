@@ -102,6 +102,56 @@ Crucially: steps 1–6 are async and triggered by events. Steps 7–9 run every 
 
 ---
 
+## Painter pipeline (Phase 2.5+)
+
+The painter is split into two named stages so the live preview can run
+the cheap one without paying for the slow one. The `applyPointillism`
+function in `src/style/Pointillism.js` chains both; the live preview
+panel calls only the first.
+
+```
+                 sourceCanvas (WebGL snapshot or downscaled copy)
+                             │
+                             ▼
+   ┌─────────────────────────────────────────────────────────────┐
+   │  Stage 1 — renderUnderpainting (src/style/underpainting.js) │
+   │   1. Allocate working canvas (drawImage source)             │
+   │   2. paintGround       broad colour fills, sun-phase tint   │
+   │   3. paintCanopy       stippled forest dabs (PR #12)        │
+   │   4. paintLandmarks    silhouette marks (PR #12)            │
+   │   5. Optional: median-blur softening (auto-scaled kernel)   │
+   │  Returns { canvas, srcData, timing }                        │
+   └─────────────────────────────────────────────────────────────┘
+                             │
+            ┌────────────────┴───────────────┐
+            ▼                                ▼
+  ┌─────────────────────────┐    ┌─────────────────────────┐
+  │  UnderpaintingPreview   │    │  Stage 2 — pointillism  │
+  │  (live, ~10 ms @ 480 px)│    │  (~22 s @ A3 + strokes) │
+  │  draw onto preview canvas│    │   palette extraction   │
+  └─────────────────────────┘    │   Scharr + Gaussian    │
+                                 │   weighted-random ←    │
+                                 │   stroke ellipse pass  │
+                                 │  Returns { canvas, ... }│
+                                 └─────────────────────────┘
+                                              │
+                                              ▼
+                                       Stylized canvas
+                                       (A3 export PNG)
+```
+
+`buildSnapshot()` in `src/snapshot.js` is the single entry point both
+stages use to assemble the `StyleBindings` from current state — the
+preview and the full paint consume identical inputs (modulo render
+dimensions). All peeks are cache-only — paint-time and preview-time
+never block on Overpass / Open-Meteo round-trips.
+
+Determinism contract: same Snapshot + same seed → byte-identical Stage 1
+output. Stage 2 inherits that determinism via the master Mulberry32
+PRNG. Verified by `scripts/parity-probe.js`.
+
+---
+
 ## Communication patterns
 
 Three patterns, used consistently:

@@ -1,5 +1,111 @@
 # Panorama — release notes
 
+## V2 — Live underpainting preview (released 2026-05-01)
+
+Curation infrastructure, not a painter feature. Splits the painter into
+two named stages — **underpainting** (paintGround + canopy + landmarks +
+optional median-blur softening) and **pointillism** (palette + gradient +
+stroke pass) — and adds a live preview panel that renders only the first
+stage at sidebar size, so curating with sliders and orbiting the camera
+gives sub-50 ms feedback instead of waiting 22 s for a full A3 paint.
+
+The pointillism pipeline is byte-identical to pre-PR. Verified by
+`scripts/parity-probe.js`: same fixed snapshot + same seed produces the
+exact same SHA-256 PNG hash before and after the refactor.
+
+### Highlights
+
+- **`renderUnderpainting(sourceCanvas, opts)`** in
+  `src/style/underpainting.js` — owns the working canvas, paintGround,
+  paintCanopy, paintLandmarks, and the optional median-blur softening
+  pass. Each painter forks its own Mulberry32 from `opts.seed` (canopy:
+  `seed^0xC4_C4_C4_C4`, landmarks: `seed^0x14_14_14_14`) so canopy /
+  landmark consumption doesn't shift the stroke-pass `rand` downstream.
+  `medianKernel: 'auto'` (the new default) scales `11 × shortEdge / 3508`
+  with a floor of 3 (always odd); Pointillism explicitly pins `11` to
+  preserve byte parity at A3.
+- **`applyPointillism` refactor** — delegates underpainting to
+  `renderUnderpainting`, then runs palette / gradient / strokes itself.
+  Pure refactor, byte-parity verified.
+- **`UnderpaintingPreviewPanel`** — floating overlay anchored
+  bottom-right, 480 × 340 (long-edge cap, short scales to maintain export
+  aspect ratio). Subscribes to `viewpoint:changed` (debounced 100 ms),
+  `painter:changed`, `terrain:changed`, `time:changed`,
+  `location:changed`, `sun:changed`, `export:changed`,
+  `weather:fetched`, `weatherOverrides:changed`, `scene:ready`.
+  Token-counter cancellation: every render bumps a token; older
+  in-flight renders discard their result silently. Soften-edges toggle
+  (default on). Render-time stat: `<ms> · <dabs> dabs · <marks> mks`.
+- **`buildSnapshot()`** in `src/snapshot.js` — single source of truth
+  for the StyleBindings shape, used by both the existing "Test
+  pointillism" trigger and the new live preview, so they consume
+  identical inputs (modulo render dimensions). Replaces the
+  in-`ControlsPanel` `buildBindings` helper with a shared module.
+- **No new state fields, no DATA-CONTRACTS.md schema bump.** The preview
+  is a derived view of existing state; show/hide and soften-edges are
+  in-session UI ephemera.
+
+### Performance
+
+A3 landscape, v1.4 expressionist preset, three synthetic perf-probe scenes
+at `scripts/preview-speed-probe.js` (480 × 340, 6 samples + warmup):
+
+| Scene  | Median  | Min     | Max     |
+| ------ | ------- | ------- | ------- |
+| forest | 10.1 ms | 8.6 ms  | 10.4 ms |
+| city   | 10.5 ms | 10.2 ms | 16.5 ms |
+| combo  | 11.9 ms | 9.6 ms  | 14.3 ms |
+
+10–12 ms median — 20× under the 200 ms pass bar, 8× under the 100 ms
+star bar. The auto-kernel scaling cut median-blur cost from ~21 ms
+(11×11 at preview size) to ~9 ms (3×3 at preview size).
+
+### Agreement
+
+Preview-vs-full agreement probe (`scripts/preview-agreement-probe.js`):
+same Snapshot rendered at 480×340 and at 4961×3508, A3 downsampled to
+preview size with bilinear, mean absolute error per channel measured
+against the preview render. Result: **MAE 0.18 / channel** (pass bar:
+< 14, ~5.5 % of 255). The horizon line and landmark silhouettes are
+visible in the preview, matching the downsampled A3 in structure.
+
+### What's intentionally deferred
+
+- **OSM-fetched event** to refresh the preview when an Overpass cache
+  warm lands. Brief restricted edits to `src/style/`, `src/ui/`, and
+  the new `src/snapshot.js`. Today the preview re-renders on
+  `scene:ready` and on every user-driven event; OSM cache landing is
+  invisible until the user nudges anything.
+- **Sky-gradient and DEM-skyline rendering inside `renderUnderpainting`.**
+  STRATEGY-V2 lists these as Stage 1 underpainting steps but they
+  don't exist yet (`SkylineCaster.getSkyline()` is unbuilt). Today the
+  source canvas comes from the WebGL viewer snapshot — same as pre-PR
+  Pointillism. Future PR can replace that with synthesised sky+skyline
+  once `SkylineCaster` lands.
+- **Persistence of show/hide and soften-edges toggle.** Local toggle
+  resets to default on reload by design. Not adding state fields
+  unless a need is surfaced.
+- **PR #12 canopy-density curation pass.** Stays parked for a
+  separate PR — this PR is the infrastructure that makes that curation
+  fast.
+
+### Files changed
+
+```
+src/snapshot.js                           new — shared StyleBindings builder
+src/style/underpainting.js                new — extracted underpainting renderer
+src/style/Pointillism.js                  refactor — delegates underpainting
+src/ui/UnderpaintingPreviewPanel.js       new — live preview overlay
+src/ui/ControlsPanel.js                   uses buildSnapshot, mounts preview
+src/ui/styles.css                         overlay + sidebar toggle styles
+scripts/parity-probe.js                   new — refactor byte-parity check
+scripts/preview-speed-probe.js            new — 480×340 perf probe
+scripts/preview-agreement-probe.js        new — preview vs A3 downsampled
+ARCHITECTURE.md                           painter pipeline diagram updated
+```
+
+---
+
 ## V2 — Painterly vegetation + landmarks (released 2026-05-01)
 
 The post-pivot reincarnation of what ROADMAP.md called "Phase 3" — forests
