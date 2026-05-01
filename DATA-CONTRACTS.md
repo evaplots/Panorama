@@ -142,6 +142,19 @@ const state = {
     dpi: 300,
     inProgress: false,
   },
+
+  // -------- Weather overrides (V2 Step 5) --------
+  // Each field is null when the WeatherPanel input is empty (= take fetched
+  // value); a number when the user has typed an override. mergeWeather() in
+  // ControlsPanel.buildBindings composes the effective WeatherSnapshot
+  // override-wins-else-fetched, per field.
+  weatherOverrides: {
+    wind: { directionDeg: null, speedMs: null },
+    cloudCover_pct: null,
+    humidity_pct: null,
+    precipitation_mmh: null,
+    temperature_C: null,
+  },
 };
 ```
 
@@ -178,6 +191,8 @@ Every event that may be emitted, who emits it, and who listens.
 | `export:progress`      | Tiled export advances                           | Export            | UI (progress bar)              | `{tile, total}`          |
 | `export:complete`      | Export finished                                 | Export            | UI                             | `{filename, sizeBytes}`  |
 | `export:error`         | Export failed                                   | Export            | UI                             | `{message: string}`      |
+| `weather:fetched`      | Open-Meteo warm fetch resolved successfully (V2 Step 5) | Scene     | UI (WeatherPanel placeholder refresh) | `null`             |
+| `weatherOverride:changed` | User typed/cleared a weather override input  | UI (WeatherPanel) | (informational; bindings composition reads state directly at trigger time) | `null` |
 
 ### Naming convention
 
@@ -422,13 +437,15 @@ keep their 3D rendering but don't appear in the painter underpainting at v0.
 
 ### v0 bindings (pointillism)
 
-These bindings ship with the v0 pointillism prototype. They are deliberately minimal — two solid bindings beat five guesses. The list grows from observed prototype behaviour, not from theory.
+These bindings ship with the v0 pointillism prototype. They are deliberately minimal — solid bindings beat guesses. The list grows from observed prototype behaviour, not from theory. All derivations live at the `applyPointillism` call site in `ControlsPanel.js`; the engine itself is unchanged from v3.5.
 
-| Visual parameter            | Source signal                              | Mapping                                                         |
-| --------------------------- | ------------------------------------------ | --------------------------------------------------------------- |
-| Brushstroke angle           | `weather.wind.directionDeg` (Open-Meteo)   | direction_in_radians + π/2 (strokes run *along* the wind)       |
-| Brushstroke length          | `weather.wind.speedMs`                     | base × (1 + windSpeedMs/10) — calmer days = shorter strokes     |
-| Palette                     | `palettes.json` curated set + `sun.phase`  | nearest curated palette by climate-zone × sun.phase enum         |
+| Visual parameter            | Source signal                              | Mapping                                                                 |
+| --------------------------- | ------------------------------------------ | ----------------------------------------------------------------------- |
+| Brushstroke angle           | `weather.wind.directionDeg` (Open-Meteo)   | `windDirectionDeg = directionDeg + 90` (strokes run *along* the wind)   |
+| Brushstroke length          | `weather.wind.speedMs`                     | `brushStrokeFactor = 1 + speedMs/10`; `windInfluence = speedMs > 1.5 ? 0.4 : 0` |
+| Brushstroke opacity         | `weather.precipitation_mmh`                | `brushOpacity = clamp(0.85 - precip/40, 0.55, 0.85)` — heavy rain softens strokes |
+| Palette desaturation        | `weather.cloudCover_pct`                   | `desaturatePalette(palette, min(0.5, cloudCover/200))` — overcast flattens toward grey. **Curated palettes only at v0** (auto/ColorThief mode would need a post-extension engine hook the brief explicitly forbids); deferred to a curation-phase PR. |
+| Palette                     | `palettes.json` curated set + `sun.phase`  | nearest curated palette by climate-zone × sun.phase enum                |
 
 ### Stroke-width as physical measurement (v1.1+)
 
@@ -512,11 +529,19 @@ hourly arrays.
  */
 ```
 
-Only `wind.directionDeg` and `wind.speedMs` are consumed by v0 bindings (see
-the table above). `cloudCover_pct`, `humidity_pct`, `pressure_hPa`,
-`precipitation_mmh`, and `weatherCode` are captured into the cache so future
-bindings (sky underpainting, wet-on-wet edge bleed, etc.) can land without a
-data-layer change.
+As of v3.7, `wind.directionDeg`, `wind.speedMs`, `cloudCover_pct`, and
+`precipitation_mmh` are consumed by v0 bindings (see the table above).
+`humidity_pct`, `pressure_hPa`, `temperature_C`, and `weatherCode` flow
+through the snapshot and the WeatherPanel override path but are not yet
+read by any binding — they land as targeted PRs during curation when a
+specific painting demands them.
+
+The user can override any of `wind.directionDeg`, `wind.speedMs`,
+`cloudCover_pct`, `humidity_pct`, `precipitation_mmh`, `temperature_C` via
+the WeatherPanel; `mergeWeather` in `ControlsPanel.buildBindings` composes
+the effective snapshot per field (override wins if finite, else fetched).
+This makes the offline-curation path real: with a cold cache, a fully
+overridden snapshot still drives a weather-aware painting.
 
 ### `CelestialSnapshot` (forward declaration)
 
@@ -565,15 +590,16 @@ Paint-time weather access is cache-only via `WeatherFetcher.peekWeather` — ide
 This file is treated as an API. If a field is added or its meaning changes, bump a version comment at the top of `state.js`:
 
 ```js
-// State schema version: 3
+// State schema version: 4
 // See docs/DATA-CONTRACTS.md
 ```
 
 The state-schema version is independent of the contract-doc version. Version 3
-of the runtime state schema has been stable since Phase 2 (v3 changelog) — the
-v3.1–v3.5 entries below all add or revise *shared types* (StyleBindings,
-SnapshotShapes, etc.) without touching the live `state` object. Bump the state
-comment only when a field is added/removed/renamed in `src/state.js`.
+of the runtime state schema was stable from Phase 2 through V2 Step 4 — the
+v3.1–v3.6 entries below all add or revise *shared types* (StyleBindings,
+SnapshotShapes, etc.) without touching the live `state` object. Version 4
+(V2 Step 5) adds the `weatherOverrides` field. Bump the state comment only
+when a field is added/removed/renamed in `src/state.js`.
 
 When a future contributor sees their local checkout's state version doesn't match the doc, they know to read the changelog at the bottom of this file before debugging.
 
@@ -589,5 +615,5 @@ When a future contributor sees their local checkout's state version doesn't matc
 - **v3.3** — Mirror config correction (response to broken-mirror failures during Phase 2 testing). Removed `overpass.kumi.systems` and `overpass.private.coffee` from the default `APIS.overpass` array — they have CORS issues from browsers and produce `ERR_CONNECTION_REFUSED`. The default config now contains only `overpass-api.de`. Backoff schedule bumped from 5/15/45s to 10/30/90s to be gentler on the public endpoint. Added "Local Overpass via Docker" section to data-layer.md as the **recommended development path** — eliminates rate-limit issues entirely. Added "Buildings (or other features) don't appear" five-step diagnostic to osm-features.md. Added rule 9 to CLAUDE.md: web-search to verify external URLs before committing them. **Verified against code on 2026-04-29:** `src/config.js` matches this config (the v3.3 changelog had previously claimed a removal that wasn't actually in the code; that drift is now resolved).
 - **v3.4** — Phase 2.5 Style module contract introduced. New `StyleBindings`, `WeatherSnapshot`, and `CelestialSnapshot` shared types defined as forward declarations (Weather and Astronomy modules don't exist yet but their consumed shape is fixed). New section: "Data → Style binding" specifying the v0 pointillism bindings (wind direction → stroke angle, wind speed → stroke length, palette by sun.phase) and reserved post-v0 bindings. New top-level modules: `src/style/`, `src/weather/`, `src/astronomy/`, `src/wildlife/` (all stubs). Determinism contract added: Style is a pure function from frozen inputs to canvas. Trigger flow documented. Module docs moved from project root to `docs/modules/`; ROLES.md path references updated to match. ARCHITECTURE.md table and file structure updated for the four new modules. Added: "Going forward, every changelog entry must include a 'Verified against code on YYYY-MM-DD' marker if it claims a code change — to prevent the doc-vs-reality drift that v3.3 had."
 - **v3.6** — Chore: removed 3D OSM rendering (ground cover, buildings, vegetation, LOD manager). The painter has owned OSM polygons since v3.5/Step 4 via `OSMFetcher.peekGroundCover`; the in-scene 3D versions had become composition-distracting (offset textures, unwanted extrusions) and Path B had already declared the 3D scene composition scaffolding only. `OSMFeatureBuilder.build()` is now a cache-warming wrapper around `OSMFetcher.fetchGroundCover` and returns an empty `osmFeatures` Group; it stays in the rebuild flow so the painter's cache-only peek finds polygons after `scene:ready`. Painter consumption path unchanged. Files removed: `src/osm/GroundCoverBuilder.js`, `src/osm/BuildingsBuilder.js`, `src/osm/VegetationBuilder.js`, `src/osm/LODManager.js`. ARCHITECTURE.md and ROLES.md updated; `docs/modules/osm-features.md` is preserved as historical reference (still describes the deleted builders) and will be rewritten when the OSM role is next active. **Verified against code on 2026-05-01:** `src/osm/index.js` matches; no remaining imports of the deleted modules; `npm run build` clean.
-- **v3.7** — V2 Step 5: Weather data live (Open-Meteo). New module file: `src/weather/WeatherFetcher.js` — `fetchWeather` + `peekWeather`, mirroring `OSMFetcher`'s peek/fetch split. Cache key: `weather:{lat3},{lon3},{hourBucketISO}`; TTL 1 h; cached value is the *mapped* `WeatherSnapshot`, not the raw API response. New endpoint: `APIS.openMeteo` in `src/config.js`. Warm path: `SceneManager` fires `WeatherFetcher.fetchWeather` fire-and-forget on `location:changed` and on `time:changed`, gated by an hour-bucket key so slider scrubs no-op within a bucket; token-guarded against stale responses. The v0 bindings declared in v3.4 (wind direction → stroke angle, wind speed → stroke length) are now actually consumed at the `applyPointillism` call site in `ControlsPanel.js` — derived as `windDirectionDeg = wind.directionDeg + 90`, `windInfluence = speedMs > 1.5 ? 0.4 : 0`, `brushStrokeFactor = 1 + speedMs / 10`; absent or cold weather skips all three so the painter falls back to its gradient-only path. `WeatherSnapshot.weatherCode` redeclared as the raw integer WMO code (the v3.4 "mapped enum" is deferred until a binding consumes it). `cloudCover_pct`, `humidity_pct`, `pressure_hPa`, `precipitation_mmh`, `weatherCode` are forward-declared and captured into the cache but **not yet read by any binding** (sky underpainting deferred per locked decision 13). After this PR, V2 is feature-complete and the next session pivots to exhibition curation. **Verified against code on 2026-05-01:** `src/weather/WeatherFetcher.js`, `src/scene/SceneManager.js` (warm wired with bucket guard), `src/ui/ControlsPanel.js` (peek + bridge at call site), `src/config.js` (`APIS.openMeteo` added) all match this entry; `npm run build` clean.
+- **v3.7** — V2 Step 5: Weather data live (Open-Meteo) **+ override panel + new v0 bindings**. State schema bumped to **v4** with the new `weatherOverrides` field (default-null shape: `{ wind:{directionDeg,speedMs}, cloudCover_pct, humidity_pct, precipitation_mmh, temperature_C }`). New module file: `src/weather/WeatherFetcher.js` — `fetchWeather` + `peekWeather`, mirroring `OSMFetcher`'s peek/fetch split. Cache key: `weather:{lat3},{lon3},{hourBucketISO}`; TTL 1 h; cached value is the *mapped* `WeatherSnapshot`, not the raw API response. `peekWeather` does **not** route through `Cache.dedupe` (paint-time stays cache-only); `fetchWeather` does, so concurrent warms in one bucket coalesce. New endpoint: `APIS.openMeteo` in `src/config.js`. Warm path: `SceneManager` fires `WeatherFetcher.fetchWeather` fire-and-forget on `location:changed` and on `time:changed`, gated by an hour-bucket key so slider scrubs no-op within a bucket; token-guarded against stale responses. Successful warm now emits a new `weather:fetched` event so `WeatherPanel` can refresh its placeholders. New UI sub-component: `src/ui/WeatherPanel.js` — six override inputs (wind direction °, wind speed m/s, cloud cover %, humidity %, precipitation mm/h, temperature °C) plus a "Reset overrides" button. Each input's placeholder text is the value most recently peeked from the cache for the current location/time (e.g., `auto · 12`); empty input → use fetched value, non-empty → override. `WeatherPanel` is mounted by `ControlsPanel` between `PalettePicker` and `PresetSelector`. New event: `weatherOverride:changed` (informational). New helper: `mergeWeather(fetched, overrides)` in `ControlsPanel` composes the effective snapshot per field (override wins if finite, else fetched, else null) and returns `undefined` when both are entirely null — that single path covers the offline-curation case (cold cache + manual overrides) without changing the StyleBindings shape under destructuring. **v0 bindings consumed at the `applyPointillism` call site:** wind direction → stroke angle (`windDirectionDeg = directionDeg + 90`), wind speed → stroke length (`brushStrokeFactor = 1 + speedMs/10`, `windInfluence = speedMs > 1.5 ? 0.4 : 0`), **precipitation → `brushOpacity = clamp(0.85 - precip/40, 0.55, 0.85)`** (new), **cloud cover → palette desaturation `factor = min(0.5, cloudCover_pct/200)` via new `desaturatePalette(palette, factor)` helper in `src/style/algorithm.js`** (new). Per the brief's "no Pointillism engine changes" constraint, the cloud-cover binding is applied to the curated palette array at the call site and therefore only fires in curated mode; auto/ColorThief mode would need a post-extension engine hook and is deferred to a curation-phase targeted PR (the helper is in place; only the wiring is missing). `WeatherSnapshot.weatherCode` is the raw integer WMO code (the v3.4 "mapped enum" stays deferred until a binding consumes it). `humidity_pct`, `pressure_hPa`, `temperature_C`, `weatherCode` flow through the snapshot and the override path but are **not yet read by any binding**. After this PR, V2 is feature-complete and the next session pivots to exhibition curation per locked decision 13. **Verified against code on 2026-05-01:** `src/weather/WeatherFetcher.js`, `src/scene/SceneManager.js` (warm with bucket guard + `weather:fetched` emit), `src/ui/WeatherPanel.js`, `src/ui/ControlsPanel.js` (mergeWeather + bindings bridge), `src/style/algorithm.js` (`desaturatePalette` exported), `src/state.js` (`weatherOverrides` field, version comment bumped to 4), `src/config.js` (`APIS.openMeteo`) all match this entry.
 - **v3.5** — V2 Step 4: OSM ground polygons in painter. `StyleBindings` gains two new fields, `viewpoint: ViewpointSnapshot` (mandatory for projection) and `ground: GroundSnapshot` (optional; absent before OSM cache lands). New shared types: `ViewpointSnapshot`, `GroundSnapshot`, `GroundFeature`. New section: "Ground category mapping" — five painter categories (water, forest, urban, farmland, beach) each with their explicit OSM-tag members. New module file: `src/style/projection.js` (pinhole projector lat/lon → canvas px, shared with Step 11 building silhouettes when that ships). New module file: `src/style/categories.js` (single source of truth for the tag → category mapping). The `Pointillism.applyPointillism` opts gain a `bindings` field; when present and `bindings.ground.osmFeatures` is non-empty, ground polygons are rendered as gradient-filled zones into the source canvas before the median-blur underpainting step, with a sun-phase tint applied. **Paint-time OSM access is cache-only:** `OSMFetcher.peekGroundCover(location, preset)` reads from the tile cache without ever issuing a network request — paint-time must not block on a 10–60 s Overpass round trip. Cold cache → `osmFeatures: []` → painter no-ops the polygon pass; the next paint after the scene rebuild's fetch lands picks up the polygons automatically. **Note on the originating brief:** the V2 build prompt drafted `ground.osmFeatures` as `{tag, category, polygon: [[lat, lon], ...]}` — that draft was superseded because the actual `OSMFetcher.elementsToPolygons` cache output has multi-tag polygons with optional inner rings, and category is a computed value not a stored one. The contract above reflects the cache reality. **Verified against code on 2026-05-01:** `src/style/projection.js`, `src/style/categories.js`, `src/style/Pointillism.js`, `src/style/groundPainter.js`, `src/osm/OSMFetcher.js` (peekGroundCover added), `src/ui/ControlsPanel.js` all match this contract; `src/config.js` `GROUND_COVER_COLOURS` is unchanged (still the source of truth for per-tag colours; categories are an additional lookup, not a replacement).

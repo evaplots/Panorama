@@ -41,7 +41,14 @@ function warmWeather() {
   _lastWarmedWeatherKey = key;
 
   const myToken = ++_weatherWarmToken;
-  WeatherFetcher.fetchWeather(location, timestamp).catch(err => {
+  WeatherFetcher.fetchWeather(location, timestamp).then(() => {
+    if (myToken !== _weatherWarmToken) return;
+    // WeatherPanel listens to refresh its placeholders. Payload is null
+    // because the panel re-peeks the cache itself — we don't want to ship
+    // the snapshot through the bus and risk staleness if the bucket has
+    // moved between fetch-issue and fetch-resolve.
+    state.emit('weather:fetched', null);
+  }).catch(err => {
     if (myToken !== _weatherWarmToken) return;
     console.warn('[SceneManager] weather warm failed:', err.message);
   });

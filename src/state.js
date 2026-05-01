@@ -1,4 +1,4 @@
-// State schema version: 3
+// State schema version: 4
 // See DATA-CONTRACTS.md
 import { DEFAULT_PRESET } from './config.js';
 
@@ -54,6 +54,17 @@ const _state = {
     // extracted from the underpainting; otherwise it is a palettes.json slug.
     painter: 'auto',
     paletteSource: 'colorthief', // 'curated' | 'colorthief'
+  },
+  // V2 Step 5: WeatherPanel overrides. Each field is null when the panel
+  // input is empty (= use fetched value); a number when the user has typed
+  // an override. mergeWeather() in ControlsPanel applies the per-field
+  // override-wins-else-fetched composition.
+  weatherOverrides: {
+    wind: { directionDeg: null, speedMs: null },
+    cloudCover_pct: null,
+    humidity_pct: null,
+    precipitation_mmh: null,
+    temperature_C: null,
   },
 };
 

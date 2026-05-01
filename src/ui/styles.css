@@ -348,6 +348,51 @@ input[type="text"]:focus, input[type="number"]:focus {
   height: 12px;
 }
 
+/* ── Weather panel ── */
+.pano-weather-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.pano-weather-row {
+  display: grid;
+  grid-template-columns: 1fr 70px 36px;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: rgba(255,255,255,.65);
+}
+.pano-weather-row input[type="number"] {
+  padding: 4px 6px;
+  font-size: 11px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.pano-weather-row input[type="number"]::placeholder {
+  color: rgba(255,255,255,.32);
+  font-style: italic;
+}
+.pano-weather-unit {
+  font-size: 10px;
+  color: rgba(255,255,255,.45);
+}
+.pano-weather-reset {
+  width: 100%;
+  margin-top: 8px;
+  background: transparent;
+  color: rgba(255,255,255,.7);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 0;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.pano-weather-reset:hover {
+  background: rgba(255,255,255,.06);
+  color: var(--fg);
+}
+
 /* ── Time slider ── */
 .pano-time-readout {
   font-size: 12px;
