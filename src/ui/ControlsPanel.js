@@ -28,17 +28,20 @@ export const ControlsPanel = {
     exportSection.innerHTML = `
       <h3>Export</h3>
       <button class="pano-export-btn" disabled>Save image</button>
-      <button class="pano-stylize-btn" disabled>🎨 Test pointillism</button>
+      <button class="pano-stylize-btn">🎨 Test pointillism</button>
     `;
     sidebar.appendChild(exportSection);
 
     const exportBtn = exportSection.querySelector('.pano-export-btn');
     const stylizeBtn = exportSection.querySelector('.pano-stylize-btn');
 
+    // Pointillism paints whatever is currently on the canvas, so it has no
+    // dependency on scene-readiness — terrain still loading, OSM not yet in,
+    // even nothing rendered yet. The button stays enabled and the user gets
+    // a painting of whatever the canvas shows at click time.
     const updateExportBtn = sceneObj => {
       const ready = sceneObj?.status === 'ready';
       exportBtn.disabled = !ready;
-      stylizeBtn.disabled = !ready;
     };
     state.on('scene:changed', updateExportBtn);
     updateExportBtn(state.get('scene'));
@@ -99,7 +102,7 @@ export const ControlsPanel = {
         console.error('Pointillism failed', e);
         alert('Pointillism failed: ' + e.message);
       } finally {
-        stylizeBtn.disabled = state.get('scene.status') !== 'ready';
+        stylizeBtn.disabled = false;
         stylizeBtn.textContent = '🎨 Test pointillism';
       }
     });
