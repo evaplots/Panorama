@@ -57,6 +57,7 @@ async function buildBindings() {
   const preset = PRESETS[presetName] ?? PRESETS[DEFAULT_PRESET];
 
   let osmFeatures = [];
+  let landmarks = [];
   try {
     const polygons = await OSMFetcher.peekGroundCover(location, preset);
     osmFeatures = polygons
@@ -68,6 +69,15 @@ async function buildBindings() {
       .filter(Boolean);
   } catch (err) {
     console.warn('[ControlsPanel] OSM cache peek failed at paint time, painting without polygons:', err.message);
+  }
+  // Landmarks share the same combined-query cache, so a successful ground
+  // peek implies a successful landmark peek. Wrapped in its own try anyway
+  // so a tag-classification bug in elementsToLandmarks doesn't blank out
+  // ground polygons (which are the higher-impact rendering layer).
+  try {
+    landmarks = await OSMFetcher.peekLandmarks(location, preset);
+  } catch (err) {
+    console.warn('[ControlsPanel] OSM landmark peek failed at paint time, painting without landmarks:', err.message);
   }
 
   const timestamp = state.get('time.timestamp');
@@ -99,7 +109,7 @@ async function buildBindings() {
       cameraWorldY,
       groundY,
     },
-    ground: { osmFeatures },
+    ground: { osmFeatures, landmarks },
     weather,
   };
 }
@@ -276,7 +286,11 @@ export const ControlsPanel = {
             Effective DPI: <strong>${timing.effectiveDpi}</strong> &middot;
               Target: ${timing.targetPaperSize} ${timing.targetOrientation} &middot;
               Stroke px: <strong>${timing.brushThicknessPx}</strong><br>
-            Ground polygons drawn: <strong>${timing.groundPolygonCount ?? 0}</strong><br>
+            Ground polygons: <strong>${timing.groundPolygonCount ?? 0}</strong> &middot;
+              Canopy dabs: <strong>${(timing.canopyDabCount ?? 0).toLocaleString()}</strong>
+              (${timing.canopyMs ?? 0} ms) &middot;
+              Landmarks: <strong>${timing.landmarkDrawnCount ?? 0}</strong>
+              (${timing.landmarkMs ?? 0} ms)<br>
             Total: <strong>${timing.totalMs} ms</strong>
             (gradient ${timing.gradientMs} ms, strokes ${timing.strokesMs} ms)<br>
             Projected A3 @ 300 DPI (17.4 MP, linear): <strong>${timing.projectedA3Ms} ms</strong>

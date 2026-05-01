@@ -418,7 +418,7 @@ projection is reproducible without the painter calling back into HeightSampler.
  */
 ```
 
-### `GroundSnapshot` (v3.5+)
+### `GroundSnapshot` (v3.5+, landmarks added v3.10)
 
 OSM ground polygons projected by the painter into the underpainting. The shape
 captured here is the *post-adapter* shape produced at the snapshot-assembly
@@ -430,6 +430,12 @@ can render holes correctly.
 /**
  * @typedef {Object} GroundSnapshot
  * @property {GroundFeature[]} osmFeatures
+ * @property {Landmark[]}     [landmarks]   v3.10+: tower / church / monument /
+ *                                          castle / named-attraction points,
+ *                                          consumed by `landmarkPainter`.
+ *                                          Optional — older snapshots without
+ *                                          this field are rendered without
+ *                                          silhouettes (graceful degrade).
  */
 
 /**
@@ -442,6 +448,23 @@ can render holes correctly.
  *                                          5-category mapping (see "Ground category mapping").
  * @property {{lat:number, lon:number}[]} outer   Outer ring vertices.
  * @property {{lat:number, lon:number}[][]} inners  Inner rings (holes), zero or more.
+ */
+
+/**
+ * @typedef {Object} Landmark
+ * @property {'tower'|'church'|'monument'|'castle'|'attraction'} category
+ *                                  Painterly archetype, derived from OSM tags by
+ *                                  `OSMFetcher.classifyLandmark` — see "Landmark
+ *                                  category mapping" below.
+ * @property {string|null} name     OSM `name` tag if present. `tourism=attraction`
+ *                                  drops anonymous entries upstream; `name` may be
+ *                                  null for the other categories.
+ * @property {number} lat           Centroid latitude (way landmarks) or coordinate
+ *                                  (node landmarks).
+ * @property {number} lon           Same, longitude.
+ * @property {number|null} heightM  Parsed from OSM `height` or `building:height`
+ *                                  if metric; null otherwise. Painter uses a
+ *                                  category-default when null.
  */
 ```
 
@@ -462,6 +485,33 @@ category are dropped at the adapter — they don't appear in `osmFeatures`.
 
 `natural=bare_rock` and `natural=scree` are not in the five-category set; they
 keep their 3D rendering but don't appear in the painter underpainting at v0.
+
+### Landmark category mapping (v3.10+)
+
+`OSMFetcher.classifyLandmark` resolves a tags object to one of the five
+painter landmark archetypes (or null if no tag matches). The mapping lives
+inside `OSMFetcher.js` so the painter consumes a fully-classified shape;
+`landmarkPainter.ARCHETYPE` keeps a sibling `KNOWN_CATEGORIES` set as a
+hardening guard against future tag drift.
+
+| Category     | Member tags                                                                                       |
+| ------------ | ------------------------------------------------------------------------------------------------- |
+| `tower`      | `man_made=tower`                                                                                  |
+| `castle`     | `historic=castle`                                                                                 |
+| `monument`   | `historic=monument`, `historic=memorial`                                                          |
+| `church`     | `amenity=place_of_worship`, `building=church`, `building=cathedral`, `building=chapel`, `building=mosque`, `building=temple` |
+| `attraction` | `tourism=attraction` AND has a `name` tag                                                         |
+
+Order is significant: an element tagged both `man_made=tower` AND
+`tourism=attraction` resolves to `tower` (more specific archetype wins).
+Anonymous `tourism=attraction` entries are dropped upstream — most are
+information boards, viewpoints, and rest stops that don't paint as a
+recognisable mark.
+
+`historic=tower` is deliberately excluded: per taginfo (verified 2026-05-01)
+it doesn't appear in the top 30 historic values, and historic towers in
+practice are tagged `man_made=tower` with `historic=yes`. Future PRs can
+revisit if curation surfaces a counterexample.
 
 ### v0 bindings (pointillism)
 
@@ -636,6 +686,65 @@ When a future contributor sees their local checkout's state version doesn't matc
 
 ## Changelog
 
+- **v3.10** — Painterly vegetation + landmarks. Reincarnates the artistic
+  intent of the original ROADMAP Phase 3 (forests should read as forests,
+  landmarks visible) inside the painter pipeline; no 3D geometry restored.
+  `GroundSnapshot` gains an optional `landmarks: Landmark[]` field. New
+  shared type: `Landmark` (`{category, name, lat, lon, heightM}`). New
+  section: "Landmark category mapping" — five archetypes (tower, church,
+  monument, castle, attraction) each with their explicit OSM-tag members;
+  `historic=tower` deliberately excluded after taginfo verification (sparse,
+  in practice tagged `man_made=tower + historic=yes`). New module files:
+  `src/style/canopyPainter.js` (stippled forest dabs over forest / wood
+  polygons) and `src/style/landmarkPainter.js` (archetypal silhouette marks
+  per category, mm-physical sizing via the same focal-length math the
+  pinhole projector uses). Plug points: canopy and landmarks both run on
+  the working canvas between `paintGround` and the median-blur underpainting
+  step, so the median softens dab + silhouette edges into the rest of the
+  painting. Each painter forks its own Mulberry32 from the master seed
+  (`seed ^ 0xC4_C4_C4_C4` for canopy, `seed ^ 0x14_14_14_14` for landmarks)
+  so canopy / landmark consumption doesn't shift the stroke-pass `rand`.
+  **Determinism contract preserved:** verified by re-rendering the same
+  source + bindings + seed twice and comparing PNG buffers byte-for-byte
+  (5,992,593 bytes, equal). **OSMFetcher extensions:** combined Overpass
+  query gains node coverage for `man_made=tower`, `historic=castle|monument|memorial`,
+  `amenity=place_of_worship`, and `tourism=attraction` (plus the way variant
+  for tourism). Per taginfo (verified 2026-05-01), 77 % of `man_made=tower`
+  and 68 % of `tourism=attraction` are nodes; the way-only query before this
+  bump missed three quarters of the landmark candidates. Cache key is
+  bbox-based so existing cached tiles silently miss the new categories
+  until their 7-day TTL expires; new locations get the full set immediately.
+  New methods: `OSMFetcher.fetchLandmarks(location, preset)` and
+  `OSMFetcher.peekLandmarks(location, preset)` — same fetch/peek split as
+  `fetchGroundCover` / `peekGroundCover`, sharing the combined-query cache
+  so calling both for the same `(location, preset)` pair issues no extra
+  Overpass round-trips. New helpers: `classifyLandmark`, `parseHeightM`,
+  `ringCentroid`, `elementsToLandmarks` (way → centroid, node → coordinates,
+  relation → first outer member's centroid). **Snapshot assembly site:**
+  `ControlsPanel.buildBindings` peeks landmarks alongside ground-cover at
+  paint time (cache-only, never blocks on Overpass); cold cache → empty
+  list → painter no-ops the landmark pass; subsequent paints after the
+  scene rebuild's warm lands pick up the landmarks automatically. **Pure
+  refactor:** `groundPainter.js` swapped from `Path2D` to
+  `ctx.beginPath` + `moveTo` / `lineTo`. node-canvas (used by the headless
+  test scripts) doesn't expose `Path2D` as a global; this also unblocks
+  node-side test coverage of the polygon underpainting path that had been
+  latent. Same visual output. **No state schema change** — landmarks ride
+  the same fetch-on-location-change path that ground-cover already uses,
+  so no new top-level `state.*` field. **Performance:** A3 landscape @ 300
+  DPI v1.4 expressionist preset. Painter timings (probe at
+  `scripts/canopy-landmark-perf-probe.js`): canopy 0.1–9 ms, landmarks
+  0.4–5 ms, three synthetic scenes (forest / city / combo). Total render
+  22–26 s in steady-state — same as RELEASE-NOTES baseline before this PR;
+  painters add < 15 ms. **Verified against code on 2026-05-01:**
+  `src/style/canopyPainter.js`, `src/style/landmarkPainter.js`,
+  `src/style/groundPainter.js` (Path2D-free), `src/style/Pointillism.js`
+  (canopy + landmark plug points + new timing fields),
+  `src/osm/OSMFetcher.js` (combined query node coverage, fetch/peekLandmarks,
+  classifyLandmark, parseHeightM, elementsToLandmarks),
+  `src/ui/ControlsPanel.js` (peekLandmarks + landmark count in result panel),
+  `scripts/canopy-landmark-perf-probe.js` (new) all match this entry;
+  `npm run build` clean (66 modules, 2.08 s).
 - **v1** (initial) — first version.
 - **v2** — Added Phase 1.5 (Ground Cover). New constants: `GROUND_COVER_COLOURS`, `GROUND_COVER_PRIORITY`, `GROUND_COVER_Z_OFFSET_M`. New OSM sub-group: `groundCover` (added to the OSMFeatureBuilder return group). No state schema changes.
 - **v3** — Phase 2 additions. `Viewpoint` type gains `mode` and `anchor` fields. State schema's `viewpoint` gains the same fields. New constants: `WALK_SPEED_MS`, `JOG_SPEED_MS`, `ACCELERATION_MS2`, `WALK_Y_SMOOTHING_MS`, `WALK_HARD_BOUND_MARGIN_M`. Two new events: `viewpoint:mode_changed`, `walker:moved`. CameraController public API gains `setMode`, `getMode`, `resetToOrigin`; the `update()` signature changes to take `deltaSeconds`.

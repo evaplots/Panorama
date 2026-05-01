@@ -6,6 +6,8 @@ import {
   medianBlur11,
 } from './algorithm.js';
 import { paintGround } from './groundPainter.js';
+import { paintCanopy } from './canopyPainter.js';
+import { paintLandmarks } from './landmarkPainter.js';
 
 // ISO A-series short-edge in mm. The "short edge" is the same regardless of
 // orientation — A3 is 297×420 mm, so portrait short = landscape short = 297.
@@ -146,13 +148,29 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
   const createCanvas = o.createCanvas || browserCreateCanvas;
   const rand = mulberry32(o.seed);
 
-  // Step 4: if data bindings are present, draw ground polygons onto a working
+  // Step 4 + V2 vegetation/landmarks: if data bindings are present, draw
+  // ground polygons, canopy stipple, and landmark silhouettes onto a working
   // copy of the source so the median-blur underpainting + gradient field both
   // see the painter's category zones. The original `sourceCanvas` is left
   // untouched and is also used as the palette-extraction source — see the
   // dedicated read below.
+  //
+  // Order matters: ground (broad fills) → canopy (stipple over forest fills)
+  // → landmarks (silhouettes on top). Each subsequent painter sees the
+  // partially-painted working canvas. The median blur downstream softens
+  // dab + silhouette edges into the rest of the painting; the gradient
+  // smoothing further dissolves anything thinner than ~10–15 px so the
+  // marks must be drawn at painted scale (canopy uses brushThicknessPx;
+  // landmarks min-size at 4 px high).
+  //
+  // Each painter gets its own PRNG forked from the master seed via XOR salt
+  // so canopy / landmark consumption doesn't shift the stroke-pass `rand`.
   let workingCanvas = sourceCanvas;
   let groundPolygonCount = 0;
+  let canopyDabCount = 0;
+  let landmarkDrawnCount = 0;
+  let canopyMs = 0;
+  let landmarkMs = 0;
   if (o.bindings?.viewpoint && o.bindings?.ground) {
     const w = createCanvas(width, height);
     const wctx = w.getContext('2d');
@@ -170,6 +188,41 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
       canvasHeight: height,
     };
     groundPolygonCount = paintGround(wctx, projectionCtx, o.bindings.ground, o.bindings.sun);
+
+    // Forest canopy stipple. Uses the same brushThicknessPx the stroke pass
+    // will use, so canopy texture matches stroke density at the chosen DPI.
+    // Computed early here (duplicating computeEffectiveDpi below) because
+    // we need it for the canopy dab radius.
+    const effectiveDpiForCanopy = o.dpi != null
+      ? o.dpi
+      : computeEffectiveDpi(width, height, o.targetPaperSize, o.targetOrientation);
+    const brushThicknessForCanopy = Math.max(
+      1,
+      Math.round(o.brushWidthMm * effectiveDpiForCanopy / 25.4),
+    );
+
+    const tCanopyStart = performance.now();
+    const canopyResult = paintCanopy(
+      wctx,
+      projectionCtx,
+      o.bindings.ground,
+      o.bindings.sun,
+      { rand: mulberry32(o.seed ^ 0xC4_C4_C4_C4), brushThicknessPx: brushThicknessForCanopy },
+    );
+    canopyMs = +(performance.now() - tCanopyStart).toFixed(1);
+    canopyDabCount = canopyResult.dabCount;
+
+    const tLandmarkStart = performance.now();
+    const landmarkResult = paintLandmarks(
+      wctx,
+      projectionCtx,
+      o.bindings.ground.landmarks,
+      o.bindings.sun,
+      { rand: mulberry32(o.seed ^ 0x14_14_14_14) },
+    );
+    landmarkMs = +(performance.now() - tLandmarkStart).toFixed(1);
+    landmarkDrawnCount = landmarkResult.drawnCount;
+
     workingCanvas = w;
   }
 
@@ -379,6 +432,10 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
     targetOrientation: o.targetOrientation,
     megapixels: +(width * height / 1e6).toFixed(2),
     groundPolygonCount,
+    canopyDabCount,
+    canopyMs,
+    landmarkDrawnCount,
+    landmarkMs,
   };
   timing.projectedA3Ms = +(timing.totalMs * 17.4 / timing.megapixels).toFixed(0);
 

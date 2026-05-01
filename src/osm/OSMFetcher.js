@@ -17,6 +17,14 @@ const MAX_SPLIT_DEPTH = 2;          // 1 km → 500 m → 250 m at most
 
 // One combined Overpass query per tile. All builders filter the result client-side.
 // Using one query (instead of one per feature type) halves request volume.
+//
+// Painterly landmarks (PR #?) added node coverage for landmark tags. Per
+// taginfo (verified 2026-05-01): man_made=tower is 77% nodes, tourism=attraction
+// is 68% nodes — the way-only query before this change missed three quarters
+// of the landmark candidates. Cache key is bbox-based so existing cached
+// tiles will silently miss the new categories until their 7-day TTL expires;
+// new locations get the full set immediately. Acceptable trade-off for a
+// single-user dev workflow.
 const combinedQuery = (s, w, n, e) => `[out:json][timeout:${OVERPASS_QUERY_TIMEOUT_S}];
 (
   way["natural"~"water|wood|sand|beach|bare_rock|scree|grassland|wetland|glacier|heath"](${s},${w},${n},${e});
@@ -28,8 +36,13 @@ const combinedQuery = (s, w, n, e) => `[out:json][timeout:${OVERPASS_QUERY_TIMEO
   way["building"](${s},${w},${n},${e});
   relation["building"](${s},${w},${n},${e});
   way["man_made"~"tower|chimney|lighthouse"](${s},${w},${n},${e});
+  node["man_made"~"tower|chimney|lighthouse"](${s},${w},${n},${e});
   way["historic"~"castle|monument|memorial"](${s},${w},${n},${e});
+  node["historic"~"castle|monument|memorial"](${s},${w},${n},${e});
   way["amenity"="place_of_worship"](${s},${w},${n},${e});
+  node["amenity"="place_of_worship"](${s},${w},${n},${e});
+  way["tourism"="attraction"](${s},${w},${n},${e});
+  node["tourism"="attraction"](${s},${w},${n},${e});
   node["natural"="tree"](${s},${w},${n},${e});
 );
 out geom;`;
@@ -255,6 +268,115 @@ async function fetchTilesForArea(location, preset) {
   return merged;
 }
 
+// Map an OSM element's tags onto one of the painterly landmark categories,
+// or return null if the element doesn't qualify. Order matters: an element
+// tagged both man_made=tower AND tourism=attraction lands as 'tower'
+// (more specific archetype wins).
+function classifyLandmark(tags) {
+  if (!tags) return null;
+  if (tags.man_made === 'tower') return 'tower';
+  if (tags.historic === 'castle') return 'castle';
+  if (tags.historic === 'monument' || tags.historic === 'memorial') return 'monument';
+  if (tags.amenity === 'place_of_worship') return 'church';
+  if (
+    tags.building === 'church' || tags.building === 'cathedral' ||
+    tags.building === 'chapel' || tags.building === 'mosque' ||
+    tags.building === 'temple'
+  ) return 'church';
+  // tourism=attraction is broad; require a name so we drop anonymous
+  // viewpoints / info boards / rest stops while keeping named monuments,
+  // observation decks, statues, etc.
+  if (tags.tourism === 'attraction' && tags.name) return 'attraction';
+  return null;
+}
+
+// Parse the OSM `height` tag into metres. OSM permits "12", "12 m", "12m",
+// "12.5 m"; rarely also "40'" (feet) but we ignore non-metric since most
+// OSM data outside the US uses metric and the painter's heights are
+// approximate by design.
+function parseHeightM(tags) {
+  if (!tags) return null;
+  const raw = tags.height ?? tags['building:height'];
+  if (!raw) return null;
+  const m = /^([0-9]+(?:\.[0-9]+)?)\s*m?$/.exec(String(raw).trim());
+  if (!m) return null;
+  const v = parseFloat(m[1]);
+  return Number.isFinite(v) && v > 0 ? v : null;
+}
+
+// Compute the centroid of a closed lat/lon ring (for way landmarks). We use
+// the simple arithmetic mean over the ring vertices — landmarks are small
+// footprints so the difference between centroid and area-centroid is
+// rounding error at painter resolution. Trailing closure-duplicate is fine
+// to include; it's just one extra equally-weighted vertex.
+function ringCentroid(ring) {
+  let sumLat = 0, sumLon = 0, count = 0;
+  for (const p of ring) {
+    if (Number.isFinite(p.lat) && Number.isFinite(p.lon)) {
+      sumLat += p.lat;
+      sumLon += p.lon;
+      count++;
+    }
+  }
+  if (count === 0) return null;
+  return { lat: sumLat / count, lon: sumLon / count };
+}
+
+/**
+ * Convert raw OSM elements into the serialisable landmark shape the
+ * painter consumes:
+ *   { category, name, lat, lon, heightM }
+ *
+ * Both ways (centroid) and nodes (coordinates) are supported so we don't
+ * lose the 70%+ of landmark data that lives on nodes (man_made=tower,
+ * tourism=attraction, many place_of_worship entries).
+ *
+ * @param {Array} elements raw Overpass elements
+ * @returns {Array<{category:string, name:string|null, lat:number, lon:number, heightM:number|null}>}
+ */
+function elementsToLandmarks(elements) {
+  const landmarks = [];
+  for (const el of elements) {
+    const category = classifyLandmark(el.tags);
+    if (!category) continue;
+
+    let lat, lon;
+    if (el.type === 'node') {
+      lat = el.lat;
+      lon = el.lon;
+    } else if (el.type === 'way' && Array.isArray(el.geometry) && el.geometry.length > 0) {
+      const c = ringCentroid(el.geometry);
+      if (!c) continue;
+      lat = c.lat;
+      lon = c.lon;
+    } else if (el.type === 'relation') {
+      // Relations are rare for landmarks; pick the first outer way's centroid
+      // if there is one. Skipped if not — we'd rather lose a few landmarks
+      // than drag relation-resolution complexity into the painter path.
+      const firstOuter = (el.members ?? []).find(
+        m => m.type === 'way' && m.role === 'outer' && Array.isArray(m.geometry)
+      );
+      if (!firstOuter) continue;
+      const c = ringCentroid(firstOuter.geometry);
+      if (!c) continue;
+      lat = c.lat;
+      lon = c.lon;
+    } else {
+      continue;
+    }
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    landmarks.push({
+      category,
+      name: el.tags.name ?? null,
+      lat,
+      lon,
+      heightM: parseHeightM(el.tags),
+    });
+  }
+  return landmarks;
+}
+
 /**
  * Convert OSM elements into a flat polygon list:
  *   { tags, outer: [{lat, lon}, ...], inners: [[{lat, lon}, ...], ...] }
@@ -330,5 +452,34 @@ export const OSMFetcher = {
     const elements = await fetchTilesForArea(location, preset);
     const filtered = elements.filter(el => el.tags?.building);
     return elementsToPolygons(filtered);
+  },
+
+  /**
+   * Fetch + filter for landmark-relevant tags + convert to the serialisable
+   * landmark shape. Reuses the combined-query cache that `fetchGroundCover`
+   * warms — calling both for the same `(location, preset)` pair issues one
+   * Overpass round-trip's worth of work the second call's cache hits.
+   *
+   * Categories: 'tower', 'castle', 'monument', 'church', 'attraction'.
+   * See `elementsToLandmarks` for the exact tag→category mapping.
+   *
+   * @param {{lat:number, lon:number}} location
+   * @param {object} preset  RadiusPreset (uses `osmRadius`, capped at 5 km)
+   * @returns {Promise<Array<{category:string, name:string|null, lat:number, lon:number, heightM:number|null}>>}
+   */
+  async fetchLandmarks(location, preset) {
+    const elements = await fetchTilesForArea(location, preset);
+    return elementsToLandmarks(elements);
+  },
+
+  /**
+   * Cache-only mirror of `fetchLandmarks`. Same semantics as `peekGroundCover`:
+   * never issues network, returns `[]` when the cache is cold so paint-time
+   * is never gated on a fresh Overpass round-trip. Subsequent paints after
+   * the scene rebuild's warm lands pick up the landmarks automatically.
+   */
+  async peekLandmarks(location, preset) {
+    const elements = await peekTilesForArea(location, preset);
+    return elementsToLandmarks(elements);
   },
 };

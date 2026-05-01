@@ -1,5 +1,113 @@
 # Panorama — release notes
 
+## V2 — Painterly vegetation + landmarks (released 2026-05-01)
+
+The post-pivot reincarnation of what ROADMAP.md called "Phase 3" — forests
+that read as forests and landmarks (towers, churches, monuments, castles,
+named tourist attractions) visible at painter scale, all expressed *inside
+the painter pipeline* rather than as 3D geometry. The v3.6 chore (2026-05-01)
+that deleted the 3D OSM rendering stays deleted; the artistic intent of
+Phase 3 lives inside `src/style/`.
+
+### Highlights
+
+- **Two new painter modules.** `src/style/canopyPainter.js` draws stippled
+  dark-green dabs over `landuse=forest` and `natural=wood` polygons, with
+  per-polygon dab density driven by screen-projected bbox area and
+  mm-physical dab radius matching the v1.4 stroke width. `src/style/landmarkPainter.js`
+  draws archetypal silhouette marks per category — thin tall stroke for
+  towers, taper-and-cross for churches, chunky tapered stone for monuments,
+  crenellated keep for castles, slim mark for tourist attractions —
+  scaled by the OSM `height` tag (or a per-category default) via the same
+  focal-length math the existing pinhole projector uses, so a 50 m tower
+  at 800 m and a 100 m tower at 1600 m render at the same pixel size.
+- **Five landmark archetypes.** `tower` (`man_made=tower`), `castle`
+  (`historic=castle`), `monument` (`historic=monument` + `historic=memorial`),
+  `church` (`amenity=place_of_worship` + `building=church|cathedral|chapel|mosque|temple`),
+  `attraction` (`tourism=attraction` filtered to entries with a `name` tag).
+  Tag mapping documented in DATA-CONTRACTS.md "Landmark category mapping."
+- **Plug points.** Both painters run on the working canvas between
+  `paintGround` and the median-blur underpainting step, so the median
+  softens dab + silhouette edges into the rest of the painting and the
+  Pointillism stroke pass downstream samples from the canopy-textured /
+  silhouette-marked underpainting.
+- **Determinism preserved.** Each painter forks its own Mulberry32 PRNG
+  from the master seed (`seed ^ 0xC4_C4_C4_C4` for canopy,
+  `seed ^ 0x14_14_14_14` for landmarks), so canopy / landmark consumption
+  doesn't shift the stroke-pass `rand`. Verified by re-rendering the same
+  source + bindings + seed twice and comparing PNG buffers byte-for-byte.
+- **OSM fetch surface extended.** Combined Overpass query gains node
+  coverage for `man_made=tower`, `historic=castle|monument|memorial`,
+  `amenity=place_of_worship`, and `tourism=attraction`. Per taginfo
+  (verified 2026-05-01), 77 % of `man_made=tower` and 68 % of
+  `tourism=attraction` are nodes — the way-only query before this PR was
+  missing three quarters of the landmark candidates. Two new methods:
+  `OSMFetcher.fetchLandmarks(location, preset)` and
+  `OSMFetcher.peekLandmarks(location, preset)` — same fetch/peek split
+  as the existing ground-cover methods, sharing the combined-query cache
+  so calling both for the same `(location, preset)` pair issues no extra
+  Overpass round-trips.
+- **Snapshot contract.** `GroundSnapshot` gains an optional
+  `landmarks: Landmark[]` field where `Landmark` is
+  `{category, name, lat, lon, heightM}`. Optional so older snapshots
+  without it render without silhouettes (graceful degrade). DATA-CONTRACTS.md
+  bumped to v3.10.
+- **Performance.** A3 landscape @ 300 DPI v1.4 expressionist preset, three
+  synthetic perf-probe scenes (forest / city / combo) at
+  `scripts/canopy-landmark-perf-probe.js`. Steady-state totals 22–26 s
+  (matching the pre-PR baseline within node-canvas variance); painter
+  timings < 60 ms on every run. The painters do not push the budget past
+  the 30 s user-tolerance bar.
+
+### What's intentionally deferred (per the brief)
+
+- **Tree species by climate zone (latitude approximation).** Original
+  Phase 3 flagged this as polish; deferred. Future PR can plumb a
+  per-latitude canopy-palette swap into `canopyPainter`.
+- **Seasonal foliage colours by date.** Same — deferred. The current
+  canopy palette is the dark-green family `GROUND_COVER_COLOURS` uses
+  for forest / wood; a date-driven seasonal palette would extend
+  `canopyPainter`'s `CANOPY_GREENS` table.
+- **Walker collision with trees.** Not applicable in V2 — there is no
+  3D vegetation to collide with. The painter's canopy is rendered into
+  the 2D paint, not the 3D scene.
+- **A `painter.canopyDabDensity` slider on `PainterParamsPanel`.** Out
+  of scope for this PR. The default density is conservative (faint
+  speckle); a future curation PR can plumb a slider through after
+  browser visual QA confirms the right level.
+- **Browser visual QA.** This PR shipped with a node-side perf probe
+  and saved A3 PNG outputs in `.iterations/2026-05-01-canopy-landmark-perf/`.
+  The user's `npm run dev` browser flow remains the canonical visual-QA
+  gate; the probe proves the pipeline works end-to-end with the
+  Pointillism path that the browser uses.
+
+### Files changed
+
+```
+src/style/canopyPainter.js          new — forest canopy stipple
+src/style/landmarkPainter.js        new — landmark silhouettes
+src/osm/OSMFetcher.js               +node coverage in combined query,
+                                    +fetchLandmarks/peekLandmarks,
+                                    +classifyLandmark/parseHeightM/
+                                     ringCentroid/elementsToLandmarks
+src/style/Pointillism.js            +canopy + landmark plug points,
+                                    +canopyDabCount/canopyMs/
+                                     landmarkDrawnCount/landmarkMs in timing
+src/style/groundPainter.js          Path2D → ctx.beginPath/moveTo/lineTo
+                                    (pure refactor, same visual output;
+                                     unblocks node-side test coverage)
+src/ui/ControlsPanel.js             buildBindings now peeks landmarks;
+                                    result panel surfaces canopy + landmark counts
+scripts/canopy-landmark-perf-probe.js  new — risk-first A3 perf probe
+DATA-CONTRACTS.md                   v3.10 — Landmark type, "Landmark
+                                    category mapping" section
+ROADMAP.md                          original Phase 3 marked SUPERSEDED
+                                    with pointer to V2 painter approach
+                                    + Decision Log entry
+```
+
+---
+
 ## Phase 2.5 v1.4 — Pointillism (released 2026-04-29)
 
 The Pointillism pass is the project's signature transform: real-world data
