@@ -112,12 +112,13 @@ export const ControlsPanel = {
     // dependency on scene-readiness — terrain still loading, OSM not yet in,
     // even nothing rendered yet. The button stays enabled and the user gets
     // a painting of whatever the canvas shows at click time.
-    const updateExportBtn = sceneObj => {
-      const ready = sceneObj?.status === 'ready';
-      exportBtn.disabled = !ready;
-    };
-    state.on('scene:changed', updateExportBtn);
-    updateExportBtn(state.get('scene'));
+    // SceneManager only emits 'scene:loading' / 'scene:ready' / 'scene:error' —
+    // there is no 'scene:changed' event. Mirror the status-bar listeners below.
+    const setExportEnabled = enabled => { exportBtn.disabled = !enabled; };
+    state.on('scene:ready', () => setExportEnabled(true));
+    state.on('scene:loading', () => setExportEnabled(false));
+    state.on('scene:error', () => setExportEnabled(false));
+    setExportEnabled(state.get('scene.status') === 'ready');
 
     exportBtn.addEventListener('click', async () => {
       const { ExportPipeline } = await import('../export/ExportPipeline.js');
