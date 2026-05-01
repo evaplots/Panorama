@@ -5,6 +5,7 @@ import {
   smoothGradient,
   medianBlur11,
 } from './algorithm.js';
+import { paintGround } from './groundPainter.js';
 
 // ISO A-series short-edge in mm. The "short edge" is the same regardless of
 // orientation — A3 is 297×420 mm, so portrait short = landscape short = 297.
@@ -106,6 +107,13 @@ const DEFAULTS = {
   applyMedianUnderpaint: true,  // 11×11 median blur on source before painting
   medianKernel: 11,             // square kernel size; reference uses 11
 
+  // Step 4: data-driven snapshot. When provided with `bindings.viewpoint` and
+  // `bindings.ground.osmFeatures`, the painter projects OSM polygons onto the
+  // source canvas before the median-blur underpainting step, giving the strokes
+  // saturated, clearly-bounded category zones to sample from. See
+  // src/style/groundPainter.js and DATA-CONTRACTS.md "GroundSnapshot".
+  bindings: null,
+
   // Gradient smoothing
   smoothGradientField: true,    // Gaussian-equivalent smoothing on dx/dy
   // smoothing radius defaults to max(w,h)/50 per the reference; can override
@@ -135,19 +143,57 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
   const { width, height } = sourceCanvas;
   const t0 = performance.now();
 
-  const srcCtx = sourceCanvas.getContext('2d', { willReadFrequently: true });
-  const srcData = srcCtx.getImageData(0, 0, width, height);
-  const tRead = performance.now();
-
   const createCanvas = o.createCanvas || browserCreateCanvas;
   const rand = mulberry32(o.seed);
 
+  // Step 4: if data bindings are present, draw ground polygons onto a working
+  // copy of the source so the median-blur underpainting + gradient field both
+  // see the painter's category zones. The original `sourceCanvas` is left
+  // untouched and is also used as the palette-extraction source — see the
+  // dedicated read below.
+  let workingCanvas = sourceCanvas;
+  let groundPolygonCount = 0;
+  if (o.bindings?.viewpoint && o.bindings?.ground) {
+    const w = createCanvas(width, height);
+    const wctx = w.getContext('2d');
+    wctx.drawImage(sourceCanvas, 0, 0);
+    const vp = o.bindings.viewpoint;
+    const projectionCtx = {
+      originLat: vp.location.lat,
+      originLon: vp.location.lon,
+      azimuthDeg: vp.azimuthDeg,
+      elevationDeg: vp.elevationDeg,
+      fovDeg: vp.fovDeg,
+      cameraWorldY: vp.cameraWorldY,
+      groundY: vp.groundY,
+      canvasWidth: width,
+      canvasHeight: height,
+    };
+    groundPolygonCount = paintGround(wctx, projectionCtx, o.bindings.ground, o.bindings.sun);
+    workingCanvas = w;
+  }
+
+  const srcCtx = workingCanvas.getContext('2d', { willReadFrequently: true });
+  const srcData = srcCtx.getImageData(0, 0, width, height);
+  const tRead = performance.now();
+
   // ─── Palette: extract or accept ──────────────────────────────────────────
+  // Palette extraction reads from the *original* sourceCanvas, never the
+  // polygon-baked working copy. When polygons cover meaningful canvas area,
+  // their flat-gradient fills bias median-cut toward earth tones and starve
+  // the sky band of warm/cool tones at stroke time — the painter then paints
+  // sky pixels in earth colours. Underpainting + gradient still read from
+  // the working canvas (srcData) above, so polygons still appear in the
+  // painted output.
   let palette;
   if (Array.isArray(o.palette) && o.palette.length > 0) {
     palette = o.palette.map(c => [c[0], c[1], c[2]]);
   } else {
-    palette = extractPalette(srcData, o.paletteSize);
+    const paletteSourceData = workingCanvas === sourceCanvas
+      ? srcData
+      : sourceCanvas.getContext('2d', { willReadFrequently: true })
+          .getImageData(0, 0, width, height);
+    palette = extractPalette(paletteSourceData, o.paletteSize);
   }
   if (o.extendPalette) {
     palette = extendPaletteFn(palette, o.paletteSatBoost, o.paletteHueJitter, rand);
@@ -165,7 +211,7 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
     underData.data.set(medianRGBA);
     ctx.putImageData(underData, 0, 0);
   } else {
-    ctx.drawImage(sourceCanvas, 0, 0);
+    ctx.drawImage(workingCanvas, 0, 0);
   }
   const tUnder = performance.now();
 
@@ -332,6 +378,7 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
     targetPaperSize: o.targetPaperSize,
     targetOrientation: o.targetOrientation,
     megapixels: +(width * height / 1e6).toFixed(2),
+    groundPolygonCount,
   };
   timing.projectedA3Ms = +(timing.totalMs * 17.4 / timing.megapixels).toFixed(0);
 

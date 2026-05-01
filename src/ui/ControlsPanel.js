@@ -8,6 +8,11 @@ import { createDebugOverlay } from './DebugOverlay.js';
 import { createPalettePicker } from './PalettePicker.js';
 import palettes from '../style/palettes.json';
 import { state } from '../state.js';
+import { CameraController } from '../camera/CameraController.js';
+import { HeightSampler } from '../terrain/HeightSampler.js';
+import { OSMFetcher } from '../osm/OSMFetcher.js';
+import { categorise } from '../style/categories.js';
+import { PRESETS, DEFAULT_PRESET, EYE_HEIGHT_M } from '../config.js';
 
 function resolvePainterOpts() {
   const painter = state.get('style.painter');
@@ -16,6 +21,62 @@ function resolvePainterOpts() {
     return { palette: palettes[painter].colors };
   }
   return {}; // colorthief / 'auto' — let applyPointillism extract from source
+}
+
+/**
+ * Build the StyleBindings snapshot at trigger time. Returns null when no
+ * location is set — the painter then falls back to its pre-Step-4 path of
+ * consuming the rendered canvas verbatim.
+ *
+ * `ground.osmFeatures` is read **cache-only** via `OSMFetcher.peekGroundCover`
+ * — paint-time must never block on a fresh Overpass fetch (10–60 s). When the
+ * cache is cold or the scene-rebuild fetch is still in flight, this returns
+ * `osmFeatures: []` and the painter no-ops the polygon pass. Subsequent paints
+ * after the scene rebuild lands pick up the polygons automatically.
+ */
+async function buildBindings() {
+  const location = state.get('location');
+  if (!location) return null;
+
+  const vp = CameraController.getViewpoint();
+  const groundY = HeightSampler.isReady()
+    ? HeightSampler.getHeightAt(location.lat, location.lon)
+    : 0;
+  const eyeHeight = vp.eyeHeight ?? EYE_HEIGHT_M;
+  const cameraWorldY = groundY + eyeHeight;
+
+  const presetName = state.get('preset');
+  const preset = PRESETS[presetName] ?? PRESETS[DEFAULT_PRESET];
+
+  let osmFeatures = [];
+  try {
+    const polygons = await OSMFetcher.peekGroundCover(location, preset);
+    osmFeatures = polygons
+      .map(p => {
+        const category = categorise(p.tags);
+        if (!category) return null;
+        return { tags: p.tags, category, outer: p.outer, inners: p.inners };
+      })
+      .filter(Boolean);
+  } catch (err) {
+    console.warn('[ControlsPanel] OSM cache peek failed at paint time, painting without polygons:', err.message);
+  }
+
+  return {
+    sun: state.get('sun'),
+    timestamp: state.get('time.timestamp'),
+    location,
+    viewpoint: {
+      location,
+      azimuthDeg: vp.azimuth,
+      elevationDeg: vp.elevation,
+      fovDeg: vp.fov,
+      eyeHeightM: eyeHeight,
+      cameraWorldY,
+      groundY,
+    },
+    ground: { osmFeatures },
+  };
 }
 
 export const ControlsPanel = {
@@ -94,10 +155,13 @@ export const ControlsPanel = {
         const targetPaperSize = state.get('paperSize') ?? 'A3';
         const targetOrientation = state.get('orientation') ?? 'portrait';
 
+        const bindings = await buildBindings();
+
         const { canvas: stylized, timing } = await applyPointillism(snap, {
           ...resolvePainterOpts(),
           targetPaperSize,
           targetOrientation,
+          bindings,
         });
         console.log('[Pointillism] timing:', timing);
 
@@ -114,6 +178,7 @@ export const ControlsPanel = {
             Effective DPI: <strong>${timing.effectiveDpi}</strong> &middot;
               Target: ${timing.targetPaperSize} ${timing.targetOrientation} &middot;
               Stroke px: <strong>${timing.brushThicknessPx}</strong><br>
+            Ground polygons drawn: <strong>${timing.groundPolygonCount ?? 0}</strong><br>
             Total: <strong>${timing.totalMs} ms</strong>
             (gradient ${timing.gradientMs} ms, strokes ${timing.strokesMs} ms)<br>
             Projected A3 @ 300 DPI (17.4 MP, linear): <strong>${timing.projectedA3Ms} ms</strong>

@@ -348,10 +348,77 @@ The Style module receives a single `StyleBindings` snapshot at trigger time. The
  * @property {SunPosition} sun           Frozen at trigger; sun.altitude drives palette warmth
  * @property {WeatherSnapshot} [weather] Frozen at trigger; optional until Weather module ships
  * @property {CelestialSnapshot} [celestial] Frozen at trigger; optional until Astronomy module ships
+ * @property {ViewpointSnapshot} viewpoint  Frozen at trigger; drives painter-side projection (Step 4+)
+ * @property {GroundSnapshot} [ground]   Frozen at trigger; OSM polygons projected into underpainting (Step 4+)
  * @property {Date} timestamp            The exact moment being painted (also frozen)
  * @property {Location} location         Where we are
  */
 ```
+
+### `ViewpointSnapshot` (v3.5+)
+
+The viewpoint values needed by painter-side projection. A subset of the live
+`Viewpoint` type, augmented with the camera world-Y at trigger time so the
+projection is reproducible without the painter calling back into HeightSampler.
+
+```js
+/**
+ * @typedef {Object} ViewpointSnapshot
+ * @property {Location} location       lat/lon of the observer
+ * @property {number} azimuthDeg       Compass bearing (0=N, 90=E, ...)
+ * @property {number} elevationDeg     Pitch (-90=down, 0=horizontal, 90=up)
+ * @property {number} fovDeg           Horizontal FOV
+ * @property {number} eyeHeightM       Above local ground
+ * @property {number} cameraWorldY     groundY + eyeHeightM, snapshot-frozen
+ * @property {number} groundY          Sampled terrain elevation under observer
+ * @property {{width:number, height:number}} canvas  Painter canvas dimensions
+ */
+```
+
+### `GroundSnapshot` (v3.5+)
+
+OSM ground polygons projected by the painter into the underpainting. The shape
+captured here is the *post-adapter* shape produced at the snapshot-assembly
+site — it is **not** the raw `OSMFetcher.elementsToPolygons` shape, but it
+preserves enough of it (multi-tag tags, outer + inner rings) that the painter
+can render holes correctly.
+
+```js
+/**
+ * @typedef {Object} GroundSnapshot
+ * @property {GroundFeature[]} osmFeatures
+ */
+
+/**
+ * @typedef {Object} GroundFeature
+ * @property {Object<string,string>} tags   All OSM tags on the polygon — needed because
+ *                                          tag → colour resolution uses GROUND_COVER_PRIORITY
+ *                                          and a single "winner" tag would lose information.
+ * @property {'water'|'forest'|'urban'|'farmland'|'beach'} category
+ *                                          Computed at adapter time from `tags` against the
+ *                                          5-category mapping (see "Ground category mapping").
+ * @property {{lat:number, lon:number}[]} outer   Outer ring vertices.
+ * @property {{lat:number, lon:number}[][]} inners  Inner rings (holes), zero or more.
+ */
+```
+
+### Ground category mapping (v3.5+)
+
+Each OSM tag in `GROUND_COVER_COLOURS` maps to exactly one of the five painter
+categories. The mapping lives in `src/style/categories.js` so the painter and
+the adapter share one source of truth. Polygons whose tags don't resolve to a
+category are dropped at the adapter — they don't appear in `osmFeatures`.
+
+| Category   | Member tags                                                                          |
+| ---------- | ------------------------------------------------------------------------------------ |
+| `water`    | `natural=water`, `natural=wetland`, `natural=glacier`, `waterway=riverbank`          |
+| `beach`    | `natural=beach`, `natural=sand`                                                      |
+| `forest`   | `natural=wood`, `landuse=forest`                                                     |
+| `urban`    | `landuse=residential`, `landuse=commercial`, `landuse=industrial`, `landuse=cemetery`, `landuse=brownfield` |
+| `farmland` | `landuse=farmland`, `landuse=orchard`, `landuse=vineyard`, `landuse=meadow`, `landuse=grass`, `natural=grassland`, `natural=heath`, `leisure=park`, `leisure=garden`, `leisure=pitch`, `leisure=golf_course` |
+
+`natural=bare_rock` and `natural=scree` are not in the five-category set; they
+keep their 3D rendering but don't appear in the painter underpainting at v0.
 
 ### v0 bindings (pointillism)
 
@@ -487,6 +554,12 @@ This file is treated as an API. If a field is added or its meaning changes, bump
 // See docs/DATA-CONTRACTS.md
 ```
 
+The state-schema version is independent of the contract-doc version. Version 3
+of the runtime state schema has been stable since Phase 2 (v3 changelog) — the
+v3.1–v3.5 entries below all add or revise *shared types* (StyleBindings,
+SnapshotShapes, etc.) without touching the live `state` object. Bump the state
+comment only when a field is added/removed/renamed in `src/state.js`.
+
 When a future contributor sees their local checkout's state version doesn't match the doc, they know to read the changelog at the bottom of this file before debugging.
 
 ---
@@ -500,3 +573,4 @@ When a future contributor sees their local checkout's state version doesn't matc
 - **v3.2** — Phase 2 follow-up. `TimeSpec` and state's `time` block gain `timezone` field (IANA tz string). TimeSlider now covers full 24 hours in location's local time, with sunrise/sunset markers. New allowed dependency: `tz-lookup` (npm, ~500 KB, client-side timezone-by-coordinates lookup, no API). New UI sub-component: `DebugOverlay` (toggle with `?` key) showing live diagnostic info. New cache keys: `osm:{z}/{x}/{y}` (replaces per-feature-type keys), `tz:{lat},{lon}`. Camera doc gains a "W keydown fires but camera doesn't move" sub-checklist (8 specific failure modes diagnosed during testing).
 - **v3.3** — Mirror config correction (response to broken-mirror failures during Phase 2 testing). Removed `overpass.kumi.systems` and `overpass.private.coffee` from the default `APIS.overpass` array — they have CORS issues from browsers and produce `ERR_CONNECTION_REFUSED`. The default config now contains only `overpass-api.de`. Backoff schedule bumped from 5/15/45s to 10/30/90s to be gentler on the public endpoint. Added "Local Overpass via Docker" section to data-layer.md as the **recommended development path** — eliminates rate-limit issues entirely. Added "Buildings (or other features) don't appear" five-step diagnostic to osm-features.md. Added rule 9 to CLAUDE.md: web-search to verify external URLs before committing them. **Verified against code on 2026-04-29:** `src/config.js` matches this config (the v3.3 changelog had previously claimed a removal that wasn't actually in the code; that drift is now resolved).
 - **v3.4** — Phase 2.5 Style module contract introduced. New `StyleBindings`, `WeatherSnapshot`, and `CelestialSnapshot` shared types defined as forward declarations (Weather and Astronomy modules don't exist yet but their consumed shape is fixed). New section: "Data → Style binding" specifying the v0 pointillism bindings (wind direction → stroke angle, wind speed → stroke length, palette by sun.phase) and reserved post-v0 bindings. New top-level modules: `src/style/`, `src/weather/`, `src/astronomy/`, `src/wildlife/` (all stubs). Determinism contract added: Style is a pure function from frozen inputs to canvas. Trigger flow documented. Module docs moved from project root to `docs/modules/`; ROLES.md path references updated to match. ARCHITECTURE.md table and file structure updated for the four new modules. Added: "Going forward, every changelog entry must include a 'Verified against code on YYYY-MM-DD' marker if it claims a code change — to prevent the doc-vs-reality drift that v3.3 had."
+- **v3.5** — V2 Step 4: OSM ground polygons in painter. `StyleBindings` gains two new fields, `viewpoint: ViewpointSnapshot` (mandatory for projection) and `ground: GroundSnapshot` (optional; absent before OSM cache lands). New shared types: `ViewpointSnapshot`, `GroundSnapshot`, `GroundFeature`. New section: "Ground category mapping" — five painter categories (water, forest, urban, farmland, beach) each with their explicit OSM-tag members. New module file: `src/style/projection.js` (pinhole projector lat/lon → canvas px, shared with Step 11 building silhouettes when that ships). New module file: `src/style/categories.js` (single source of truth for the tag → category mapping). The `Pointillism.applyPointillism` opts gain a `bindings` field; when present and `bindings.ground.osmFeatures` is non-empty, ground polygons are rendered as gradient-filled zones into the source canvas before the median-blur underpainting step, with a sun-phase tint applied. **Paint-time OSM access is cache-only:** `OSMFetcher.peekGroundCover(location, preset)` reads from the tile cache without ever issuing a network request — paint-time must not block on a 10–60 s Overpass round trip. Cold cache → `osmFeatures: []` → painter no-ops the polygon pass; the next paint after the scene rebuild's fetch lands picks up the polygons automatically. **Note on the originating brief:** the V2 build prompt drafted `ground.osmFeatures` as `{tag, category, polygon: [[lat, lon], ...]}` — that draft was superseded because the actual `OSMFetcher.elementsToPolygons` cache output has multi-tag polygons with optional inner rings, and category is a computed value not a stored one. The contract above reflects the cache reality. **Verified against code on 2026-05-01:** `src/style/projection.js`, `src/style/categories.js`, `src/style/Pointillism.js`, `src/style/groundPainter.js`, `src/osm/OSMFetcher.js` (peekGroundCover added), `src/ui/ControlsPanel.js` all match this contract; `src/config.js` `GROUND_COVER_COLOURS` is unchanged (still the source of truth for per-tag colours; categories are an additional lookup, not a replacement).
