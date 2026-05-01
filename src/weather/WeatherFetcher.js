@@ -39,7 +39,7 @@ function hourBucketISO(timestamp) {
   return `${yyyy}-${mm}-${dd}T${hh}:00Z`;
 }
 
-/** Open-Meteo's start_hour/end_hour parameter format: "yyyy-mm-ddThh:mm" (UTC). */
+/** Open-Meteo forecast's start_hour/end_hour parameter format: "yyyy-mm-ddThh:mm" (UTC). */
 function openMeteoHourParam(timestamp) {
   const d = floorToHourUTC(timestamp);
   const yyyy = d.getUTCFullYear();
@@ -49,11 +49,39 @@ function openMeteoHourParam(timestamp) {
   return `${yyyy}-${mm}-${dd}T${hh}:00`;
 }
 
+/** Open-Meteo archive's start_date/end_date parameter format: "yyyy-mm-dd" (UTC). */
+function openMeteoDateParam(timestamp) {
+  const d = floorToHourUTC(timestamp);
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 function cacheKey(location, timestamp) {
   return `weather:${location.lat.toFixed(3)},${location.lon.toFixed(3)},${hourBucketISO(timestamp)}`;
 }
 
-function buildUrl(location, timestamp) {
+/** UTC milliseconds at the start of today (00:00:00 UTC). */
+function startOfTodayUTCms() {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+/**
+ * Predicate: archive endpoint covers the requested timestamp.
+ *
+ * Open-Meteo's forecast endpoint covers ~today − a few days through ~16 days
+ * ahead; the archive covers everything strictly before today. The simplest
+ * correct rule is: if the requested timestamp's UTC hour-bucket falls before
+ * the start of today (UTC), use the archive — otherwise the forecast.
+ */
+function shouldUseArchive(timestamp) {
+  return floorToHourUTC(timestamp).getTime() < startOfTodayUTCms();
+}
+
+function buildForecastUrl(location, timestamp) {
   const hour = openMeteoHourParam(timestamp);
   const params = new URLSearchParams({
     latitude: String(location.lat),
@@ -67,24 +95,49 @@ function buildUrl(location, timestamp) {
   return `${APIS.openMeteo}?${params.toString()}`;
 }
 
-/** Map the Open-Meteo hourly slice into the WeatherSnapshot shape. */
+function buildArchiveUrl(location, timestamp) {
+  const date = openMeteoDateParam(timestamp);
+  const params = new URLSearchParams({
+    latitude: String(location.lat),
+    longitude: String(location.lon),
+    hourly: HOURLY_VARS,
+    wind_speed_unit: 'ms',
+    timezone: 'UTC',
+    start_date: date,
+    end_date: date,
+  });
+  return `${APIS.openMeteoArchive}?${params.toString()}`;
+}
+
+/**
+ * Map the Open-Meteo hourly response into the WeatherSnapshot shape. The
+ * forecast endpoint with start_hour=end_hour returns a single-element slice
+ * (idx 0); the archive endpoint with start_date=end_date returns 24 entries
+ * for the day, so we look up the row matching `bucketDate`'s UTC hour.
+ */
 function toSnapshot(json, bucketDate) {
   const h = json?.hourly;
   if (!h || !Array.isArray(h.time) || h.time.length === 0) {
     throw new Error('Open-Meteo response missing hourly data');
   }
+  // Open-Meteo emits "YYYY-MM-DDTHH:MM" without a 'Z' when timezone=UTC.
+  // bucketDate is the request's hour-bucket (also UTC), so compare on the
+  // 13-char "YYYY-MM-DDTHH" prefix to find the right row.
+  const targetPrefix = bucketDate.toISOString().slice(0, 13);
+  let i = h.time.findIndex(t => typeof t === 'string' && t.startsWith(targetPrefix));
+  if (i < 0) i = 0; // shouldn't happen with our tight start/end window, but be lenient
   return {
     wind: {
-      directionDeg: h.wind_direction_10m?.[0] ?? null,
-      speedMs:      h.wind_speed_10m?.[0]     ?? null,
-      gustMs:       h.wind_gusts_10m?.[0]     ?? null,
+      directionDeg: h.wind_direction_10m?.[i] ?? null,
+      speedMs:      h.wind_speed_10m?.[i]     ?? null,
+      gustMs:       h.wind_gusts_10m?.[i]     ?? null,
     },
-    cloudCover_pct:   h.cloud_cover?.[0]          ?? null,
-    humidity_pct:     h.relative_humidity_2m?.[0] ?? null,
-    pressure_hPa:     h.surface_pressure?.[0]     ?? null,
-    temperature_C:    h.temperature_2m?.[0]       ?? null,
-    precipitation_mmh: h.precipitation?.[0]       ?? null,
-    weatherCode:      h.weather_code?.[0]         ?? null,
+    cloudCover_pct:   h.cloud_cover?.[i]          ?? null,
+    humidity_pct:     h.relative_humidity_2m?.[i] ?? null,
+    pressure_hPa:     h.surface_pressure?.[i]     ?? null,
+    temperature_C:    h.temperature_2m?.[i]       ?? null,
+    precipitation_mmh: h.precipitation?.[i]       ?? null,
+    weatherCode:      h.weather_code?.[i]         ?? null,
     timestamp: bucketDate,
   };
 }
@@ -105,7 +158,13 @@ async function fetchWeather(location, timestamp) {
     const cached = await Cache.get(key);
     if (cached) return cached;
 
-    const res = await fetch(buildUrl(location, timestamp));
+    // Forecast endpoint covers ~today − a few days through ~16 days ahead;
+    // archive covers older. Cache key is endpoint-agnostic so a hit from
+    // either endpoint is reusable.
+    const url = shouldUseArchive(timestamp)
+      ? buildArchiveUrl(location, timestamp)
+      : buildForecastUrl(location, timestamp);
+    const res = await fetch(url);
     if (!res.ok) throw new Error(`Open-Meteo HTTP ${res.status}`);
     const json = await res.json();
 

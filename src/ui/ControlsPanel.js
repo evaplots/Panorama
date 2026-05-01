@@ -2,6 +2,7 @@ import { createLocationPicker } from './LocationPicker.js';
 import { createMapPicker } from './MapPicker.js';
 import { createIconicViewGallery } from './IconicViewGallery.js';
 import { createPresetSelector } from './PresetSelector.js';
+import { createDatePicker } from './DatePicker.js';
 import { createTimeSlider } from './TimeSlider.js';
 import { createModeToggle } from './ModeToggle.js';
 import { createDebugOverlay } from './DebugOverlay.js';
@@ -160,6 +161,7 @@ export const ControlsPanel = {
     createPalettePicker(sidebar);
     createWeatherPanel(sidebar);
     createPresetSelector(sidebar);
+    createDatePicker(sidebar);
     createTimeSlider(sidebar);
     createModeToggle(sidebar);
     createDebugOverlay();

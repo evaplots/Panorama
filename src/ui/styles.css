@@ -393,6 +393,22 @@ input[type="text"]:focus, input[type="number"]:focus {
   color: var(--fg);
 }
 
+/* ── Date picker ── */
+.pano-date-input {
+  width: 100%;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 7px 9px;
+  color: var(--fg);
+  font-size: 12px;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+  /* Native picker indicator stays light enough to read on dark theme */
+  color-scheme: dark;
+}
+.pano-date-input:focus { border-color: var(--accent); }
+
 /* ── Time slider ── */
 .pano-time-readout {
   font-size: 12px;
