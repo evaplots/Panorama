@@ -200,6 +200,8 @@ Faithful implementation of `guillaume-gomez/to-pointillism`:
 | Painter ground polygons use flat-Y projection (Step 4 v0) — every polygon vertex assumed at observer's groundY, ignoring local terrain elevation. Increasingly inaccurate at distance / on hilly terrain. Fix: per-vertex HeightSampler call at snapshot-assembly time, with a small spatial cache. Defer until painter→Path-B migration touches the snapshot pipeline anyway. | P2 |
 | Painter ground polygons skip `bare_rock` and `scree` tags (not in the 5 painter categories). The 3D scene still renders these. Add a 6th painter category "rocky" if alpine presets read poorly. | P2 |
 | Per-source cache TTL table for V2 painter snapshot data | P2 |
+| Restore 3D OSM rendering if ever wanted again — the deleted Phase 1.5 / Phase 2 / Phase 3 builders (`GroundCoverBuilder`, `BuildingsBuilder`, `VegetationBuilder`) and `LODManager` can be recovered from git history. Last commit on `main` with them: `80b82fa` (V2 Step 4 merge). After that commit, 3D OSM rendering was removed in favour of painter-side polygons. | P3 |
+| Rewrite `docs/modules/osm-features.md` to match the post-chore reality (cache-warming wrapper + painter peek). The file currently still describes the deleted 3D builders. Until rewritten, treat as historical. | P3 |
 
 ## 13. Open questions for project owner
 

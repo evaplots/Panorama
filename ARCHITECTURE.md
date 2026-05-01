@@ -158,10 +158,14 @@ src/
 │
 ├── osm/
 │   ├── OSMFetcher.js            Overpass queries by tile, with retries.
-│   ├── GroundCoverBuilder.js    Phase 1.5: coloured polygons projected on terrain.
-│   ├── BuildingsBuilder.js      Phase 2: extruded-polygon buildings, instanced where possible.
-│   ├── VegetationBuilder.js     Phase 3: forest polygons + scattered 3D tree instances.
-│   └── LODManager.js            Decides which builder runs at what radius.
+│   │                            Exposes fetchGroundCover (3D scene cache-warm)
+│   │                            and peekGroundCover (painter, cache-only).
+│   └── index.js                 OSMFeatureBuilder.build(): cache-warming
+│                                placeholder; painter consumes the warmed
+│                                cache via peekGroundCover (V2 Step 4). The
+│                                3D ground/buildings/vegetation builders and
+│                                LODManager were removed; see git history if
+│                                they need to be restored.
 │
 ├── camera/
 │   ├── CameraController.js      Orbit/pan controls, FOV, eye height, drag-to-look.
