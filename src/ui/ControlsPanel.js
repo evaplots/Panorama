@@ -191,6 +191,12 @@ export const ControlsPanel = {
           paletteTemperature: p.paletteTemperature,
           paletteSize: p.paletteSize,
           seed: p.seed,
+          // Water painter knobs (Phase 5 painterly water reflections).
+          // Defaults match the engine baseline; the panel sliders mutate
+          // these on input so the next paint picks them up.
+          waterReflectionStrength: p.water?.reflectionStrength ?? 0.6,
+          waterSunGlitterEnabled: p.water?.sunGlitterEnabled ?? true,
+          waterRippleDensity: p.water?.rippleDensity ?? 0.4,
         };
         // Wind-tilt override semantics: when finite, the user wants
         // unconditional control — force windInfluence and let the panel

@@ -121,8 +121,13 @@ export function paintGround(ctx, projectionCtx, ground, sun) {
 
   // Project everything first so we can sort by screen-area (big polygons
   // drawn first, small last — small details survive on top).
+  // Water polygons are skipped here: waterPainter owns natural=water
+  // category end-to-end (base fill + sky-sampling band + glitter + ripples)
+  // because flat-blue overpaint would waste the deep-water tone the
+  // reflection treatment wants. See src/style/waterPainter.js.
   const projected = [];
   for (const f of features) {
+    if (f.category === 'water') continue;
     const colour = resolvePolygonColour(f.tags);
     if (colour == null) continue;
     const outer = projector.projectRing(f.outer, groundY);

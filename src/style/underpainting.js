@@ -25,6 +25,7 @@
 // sourceCanvas + same opts → same output canvas, byte-identical.
 
 import { paintGround } from './groundPainter.js';
+import { paintWater } from './waterPainter.js';
 import { paintCanopy } from './canopyPainter.js';
 import { paintLandmarks } from './landmarkPainter.js';
 import { medianBlur11 } from './algorithm.js';
@@ -54,6 +55,12 @@ const DEFAULTS = {
                                // an explicit odd integer pins it (Pointillism
                                // pins 11 to preserve byte parity at A3).
   seed: 0xC0FFEE,
+  // Water painter knobs — surfaced through PainterParamsPanel as
+  // state.painter.water.*. Defaults match the panel defaults so an
+  // untouched panel matches the engine baseline.
+  waterReflectionStrength: 0.6,
+  waterSunGlitterEnabled: true,
+  waterRippleDensity: 0.4,
 };
 
 // Auto-kernel scaling: the 11×11 reference was tuned for A3 short edge
@@ -124,6 +131,10 @@ export async function renderUnderpainting(sourceCanvas, opts = {}) {
   wctx.drawImage(sourceCanvas, 0, 0);
 
   let groundPolygonCount = 0;
+  let waterPolygonCount = 0;
+  let waterGlitterDabCount = 0;
+  let waterRippleDabCount = 0;
+  let waterMs = 0;
   let canopyDabCount = 0;
   let landmarkDrawnCount = 0;
   let canopyMs = 0;
@@ -147,9 +158,9 @@ export async function renderUnderpainting(sourceCanvas, opts = {}) {
       wctx, projectionCtx, o.bindings.ground, o.bindings.sun,
     );
 
-    // Canopy and landmark painters need the same brushThicknessPx the
-    // stroke pass uses, so canopy texture matches stroke density at the
-    // chosen DPI. Same formula as Pointillism's stroke-pass setup.
+    // Canopy / landmark / water painters all need the same brushThicknessPx
+    // the stroke pass uses, so painted texture matches stroke density at
+    // the chosen DPI. Same formula as Pointillism's stroke-pass setup.
     const effectiveDpi = o.dpi != null
       ? o.dpi
       : computeEffectiveDpi(width, height, o.targetPaperSize, o.targetOrientation);
@@ -157,6 +168,29 @@ export async function renderUnderpainting(sourceCanvas, opts = {}) {
       1,
       Math.round(o.brushWidthMm * effectiveDpi / 25.4),
     );
+
+    // Water before canopy because a forest can't grow on a lake; water
+    // before landmarks because a tower on a lake reflects into the water
+    // (out of scope for v1, but the order matters for v2). The water
+    // painter samples the working canvas directly via per-polygon
+    // localised getImageData strips for its sky-band tint — paintGround
+    // skips water polygons, so the sky region above each water polygon
+    // still holds the original sky pixels at this point in the pipeline.
+    const tWater = performance.now();
+    const waterResult = paintWater(
+      wctx, projectionCtx, o.bindings.ground, o.bindings.sun,
+      {
+        rand: mulberry32(o.seed ^ 0x77_77_77_77),
+        brushThicknessPx,
+        reflectionStrength: o.waterReflectionStrength,
+        sunGlitterEnabled: o.waterSunGlitterEnabled,
+        rippleDensity: o.waterRippleDensity,
+      },
+    );
+    waterMs = +(performance.now() - tWater).toFixed(1);
+    waterPolygonCount = waterResult.polygonCount;
+    waterGlitterDabCount = waterResult.glitterDabCount;
+    waterRippleDabCount = waterResult.rippleDabCount;
 
     const tCanopy = performance.now();
     const canopyResult = paintCanopy(
@@ -210,6 +244,10 @@ export async function renderUnderpainting(sourceCanvas, opts = {}) {
     srcData,
     timing: {
       groundPolygonCount,
+      waterPolygonCount,
+      waterGlitterDabCount,
+      waterRippleDabCount,
+      waterMs,
       canopyDabCount,
       canopyMs,
       landmarkDrawnCount,

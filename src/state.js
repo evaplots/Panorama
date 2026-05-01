@@ -1,4 +1,4 @@
-// State schema version: 5
+// State schema version: 6
 // See DATA-CONTRACTS.md
 import { DEFAULT_PRESET } from './config.js';
 
@@ -82,6 +82,19 @@ const _state = {
     paletteSize: 20,
     windInfluenceOverride: null,
     seed: 0xC0FFEE,
+    // Water painter (Phase 5 painterly water reflections, schema v6).
+    // Surfaced by PainterParamsPanel as three sliders / one toggle.
+    // reflectionStrength: 0..1 — how strongly the sky-sampling band overrides
+    //   the water's deep blue at the polygon's far edge (0 = none, 1 = full
+    //   replacement); cosine falloff over the band depth.
+    // sunGlitterEnabled: bool — toggle for the back-lit sun glitter streak.
+    //   Front-lit water (sun behind camera) shows no glitter regardless.
+    // rippleDensity: 0..1 — surface stroke density (horizontal painterly dabs).
+    water: {
+      reflectionStrength: 0.6,
+      sunGlitterEnabled: true,
+      rippleDensity: 0.4,
+    },
   },
   // V2 Step 5c: TerrainPanel surface. yExaggeration multiplies the heightmap
   // at TerrainBuilder.build() — vertical scale of the rendered mountains and
