@@ -6,6 +6,36 @@ import {
   medianBlur11,
 } from './algorithm.js';
 
+// ISO A-series short-edge in mm. The "short edge" is the same regardless of
+// orientation — A3 is 297×420 mm, so portrait short = landscape short = 297.
+const PAPER_SHORT_EDGE_MM = { A4: 210, A3: 297, A2: 420 };
+const MM_PER_INCH = 25.4;
+
+/**
+ * Effective DPI implied by rendering this canvas at the chosen paper size.
+ * Used so that brushWidthMm × effectiveDpi / 25.4 yields a stroke that
+ * represents the same physical mark on the eventual print, regardless of
+ * the canvas's pixel resolution.
+ *
+ * @param {number} canvasWidth   pixels
+ * @param {number} canvasHeight  pixels
+ * @param {'A4'|'A3'|'A2'} paperSize
+ * @param {'portrait'|'landscape'} _orientation  accepted for API symmetry;
+ *        the short-edge-in-mm is orientation-invariant for ISO A-series, so
+ *        this argument doesn't change the result. min(w,h) handles whichever
+ *        dimension is short on the canvas.
+ * @returns {number} effective DPI
+ */
+export function computeEffectiveDpi(canvasWidth, canvasHeight, paperSize, _orientation) {
+  const paperShortMm = PAPER_SHORT_EDGE_MM[paperSize];
+  if (!paperShortMm) {
+    throw new Error(`computeEffectiveDpi: unknown paperSize "${paperSize}"`);
+  }
+  const paperShortIn = paperShortMm / MM_PER_INCH;
+  const canvasShortPx = Math.min(canvasWidth, canvasHeight);
+  return canvasShortPx / paperShortIn;
+}
+
 // Default canvas factory — used in browsers. Node tests inject their own via opts.createCanvas
 // (e.g. node-canvas's createCanvas), keeping this module environment-agnostic.
 function browserCreateCanvas(width, height) {
@@ -34,11 +64,18 @@ const DEFAULTS = {
   // by default, no smoothing, no median underpainting) were a creative drift
   // away from the reference; restored 2026-04-29 per user redirect.
 
-  // Stroke-width as a physical measurement. brushWidthMm × dpi / 25.4 gives
-  // the pixel value used as the ellipse minor radius. Default 0.7 mm at 300 DPI
-  // ≈ 8.27 px, matching the reference's empirical computeBrushThickness for A3.
+  // Stroke-width as a physical measurement. brushWidthMm × effectiveDpi / 25.4
+  // gives the pixel value used as the ellipse minor radius. Default 0.7 mm.
+  // Effective DPI is *derived* from the source canvas dimensions and the
+  // chosen target paper size — see computeEffectiveDpi above. This keeps the
+  // physical stroke width contract (0.7 mm on the eventual print) intact at
+  // any canvas resolution, so a 1.91 MP screen preview produces visibly
+  // smaller strokes than a 17.4 MP A3 export, exactly proportional to the
+  // print they each represent.
   brushWidthMm: 0.7,        // physical width, default 0.7 mm (bounds 0.3–3.0)
-  dpi: 300,                 // export DPI used to convert mm → px
+  targetPaperSize: 'A3',    // 'A4' | 'A3' (default) | 'A2'
+  targetOrientation: 'portrait', // 'portrait' (default) | 'landscape'
+  dpi: null,                // explicit DPI override; null = derive from canvas + target
 
   density: 0.06,            // fraction of pixels that get a stroke; reference uses
                             // ~all pixels in random order (density 1.0) but for A3
@@ -143,9 +180,15 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
   const tGrad = performance.now();
 
   // ─── Stroke pass ─────────────────────────────────────────────────────────
+  // Resolve effective DPI. An explicit `dpi` opt overrides; otherwise we
+  // derive from canvas short-edge ÷ target paper short-edge so the 0.7 mm
+  // physical stroke contract holds at any source resolution.
+  const effectiveDpi = o.dpi != null
+    ? o.dpi
+    : computeEffectiveDpi(width, height, o.targetPaperSize, o.targetOrientation);
   const brushThicknessPx = Math.max(
     1,
-    Math.round(o.brushWidthMm * o.dpi / 25.4),
+    Math.round(o.brushWidthMm * effectiveDpi / 25.4),
   );
 
   const strokeCount = Math.floor(width * height * o.density);
@@ -285,6 +328,9 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
     strokeCount,
     paletteSize: paletteLen,
     brushThicknessPx,
+    effectiveDpi: +effectiveDpi.toFixed(1),
+    targetPaperSize: o.targetPaperSize,
+    targetOrientation: o.targetOrientation,
     megapixels: +(width * height / 1e6).toFixed(2),
   };
   timing.projectedA3Ms = +(timing.totalMs * 17.4 / timing.megapixels).toFixed(0);
