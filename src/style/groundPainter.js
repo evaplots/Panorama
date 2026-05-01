@@ -72,13 +72,15 @@ function rgbCss([r, g, b]) {
   return `rgb(${r},${g},${b})`;
 }
 
-// Build a Path2D for a closed ring. Skips rings that didn't survive the clip.
-function ringPath(ring) {
-  const path = new Path2D();
-  path.moveTo(ring[0].sx, ring[0].sy);
-  for (let i = 1; i < ring.length; i++) path.lineTo(ring[i].sx, ring[i].sy);
-  path.closePath();
-  return path;
+// Trace a closed ring into the context's current path. Used by `ctx.fill`
+// and `ctx.clip` callers below — both happen inside ctx.save/restore pairs
+// so we don't pollute the caller's path. We avoid Path2D here because
+// node-canvas (used by the headless test scripts) doesn't expose it as a
+// global; ctx.beginPath + moveTo/lineTo is the cross-environment path.
+function tracePath(ctx, ring) {
+  ctx.moveTo(ring[0].sx, ring[0].sy);
+  for (let i = 1; i < ring.length; i++) ctx.lineTo(ring[i].sx, ring[i].sy);
+  ctx.closePath();
 }
 
 // Bounding box of an array of {sx, sy} points.
@@ -138,11 +140,11 @@ export function paintGround(ctx, projectionCtx, ground, sun) {
     const baseRgb = hexToRgb(colour);
     const { minY, maxY } = ringBBox(outer);
 
-    // Clip to the polygon (outer minus inners) so inner rings act as holes.
-    // Path2D + 'evenodd' fill rule does the cutout in one fill call.
-    const path = new Path2D();
-    path.addPath(ringPath(outer));
-    for (const inner of inners) path.addPath(ringPath(inner));
+    // Outer ring + inner rings together as one path, with 'evenodd' fill
+    // rule so inners cut holes in the outer fill in a single fill call.
+    ctx.beginPath();
+    tracePath(ctx, outer);
+    for (const inner of inners) tracePath(ctx, inner);
 
     // Clamp gradient endpoints to canvas bounds — a polygon that extends well
     // off-screen would otherwise produce a near-flat gradient over the visible
@@ -152,7 +154,7 @@ export function paintGround(ctx, projectionCtx, ground, sun) {
     if (yBot - yTop < 1) {
       // Single-row polygon — just flat fill
       ctx.fillStyle = rgbCss(baseRgb);
-      ctx.fill(path, 'evenodd');
+      ctx.fill('evenodd');
       continue;
     }
 
@@ -161,20 +163,20 @@ export function paintGround(ctx, projectionCtx, ground, sun) {
     grad.addColorStop(1, rgbCss(darken(baseRgb, 0.30)));
 
     ctx.fillStyle = grad;
-    ctx.fill(path, 'evenodd');
+    ctx.fill('evenodd');
   }
 
   // Sun-phase tint — applied as a single overlay clipped to the *union* of
   // all projected polygons, so sky / off-polygon pixels stay untouched.
   const tint = SUN_PHASE_TINT[sun?.phase] ?? SUN_PHASE_TINT.day;
   if (tint.alpha > 0) {
-    const unionPath = new Path2D();
-    for (const { outer, inners } of projected) {
-      unionPath.addPath(ringPath(outer));
-      for (const inner of inners) unionPath.addPath(ringPath(inner));
-    }
     ctx.save();
-    ctx.clip(unionPath, 'evenodd');
+    ctx.beginPath();
+    for (const { outer, inners } of projected) {
+      tracePath(ctx, outer);
+      for (const inner of inners) tracePath(ctx, inner);
+    }
+    ctx.clip('evenodd');
 
     // Desaturate first (mix toward grey) if night/twilight asks for it
     if (tint.desat > 0) {

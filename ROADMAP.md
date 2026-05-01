@@ -167,11 +167,29 @@ A3 @ 300 DPI is ~17.4 megapixels — 50× the typical input the reference repo h
 
 ---
 
-## Phase 3 — 3D Vegetation & landmarks
+## Phase 3 — 3D Vegetation & landmarks  ⚠️ SUPERSEDED
 
-**Goal:** Add 3D vegetation on top of the ground cover from Phase 1.5. Trees, forests, individual notable trees. Combined with Phase 1.5 (correct ground colours) and Phase 2 (buildings), this completes the recognisability story.
+> **Superseded 2026-05-01.** The 3D vegetation / 3D landmark detection
+> path described below is no longer the plan. The v3.6 chore (commit
+> `d7cd185`) deleted the 3D OSM rendering pipeline (`GroundCoverBuilder`,
+> `BuildingsBuilder`, `VegetationBuilder`, `LODManager`); the painter
+> (`src/style/`) now owns OSM expression directly via `OSMFetcher.peekGroundCover`
+> and `OSMFetcher.peekLandmarks`. The artistic intent of Phase 3 — *forests
+> read as forests, landmarks visible* — is achieved instead by the
+> **painterly vegetation + landmarks** PR (`feature/painterly-vegetation-landmarks`):
+> two new painter modules (`src/style/canopyPainter.js`,
+> `src/style/landmarkPainter.js`) that draw painterly canopy stipple and
+> archetypal landmark silhouettes into the underpainting before the
+> Pointillism stroke pass. See the V2 vegetation/landmarks entry in
+> RELEASE-NOTES.md and the v3.10 changelog entry in DATA-CONTRACTS.md
+> for the contract.
+>
+> The original Phase 3 description below is preserved as historical context;
+> do not implement it.
 
-**Modules involved:**
+**Goal (original, superseded):** Add 3D vegetation on top of the ground cover from Phase 1.5. Trees, forests, individual notable trees. Combined with Phase 1.5 (correct ground colours) and Phase 2 (buildings), this completes the recognisability story.
+
+**Modules involved (original, all deleted in v3.6):**
 
 - ✅ `src/osm/VegetationBuilder.js` — instanced 3D trees scattered within forest polygons
 - ⬆️ `src/osm/LODManager.js` (now handles vegetation tiers as well)
@@ -282,5 +300,6 @@ Record significant architectural decisions here so future contributors understan
 - **Why was Phase 1.5 (Ground Cover) inserted between Phase 1 and Phase 2?** After Phase 1 was built and tested, it became clear that the placeholder elevation-based terrain colouring (blue/green/brown by altitude) made every location look essentially the same — beaches looked like fields, urban areas looked like meadows, water blended into terrain. Adding ground cover (OSM `natural` and `landuse` polygons projected as coloured terrain overlays) turned out to be the single highest-impact change for recognisability and is technically simpler than buildings (no extrusion, no LOD complexity). It also validates the OSM data layer and Overpass infrastructure before the more complex Phase 2 work begins.
 - **Why was walking mode added to Phase 2 instead of being a later phase?** Phase 2's ground-aware camera already requires per-position terrain height queries via `HeightSampler.getHeightAtWorld()`. Walking mode reuses exactly that query, just runs it every frame. Bundling them avoids touching the Camera module twice. It also dramatically improves the user experience — being able to wander to find the perfect viewpoint matches how a real photographer scouts a location, and is a more natural way to use a sunset-photography tool than dragging a fixed point. Walk mode (Mode B in design discussion) was chosen over free-fly (Mode A — too god-like for stills work) and walk-with-collision (Mode C — overkill; one can simply walk around buildings). **Honest reframing (post-Phase 2.5 reasoning):** walk mode is composition-finding, which is a means to the end of "painting the right scene." Once the painterly trigger ships, walk mode is best understood as *easel-positioning*, not as "exploring an art gallery." Orbit-only would have shipped sooner; walk mode is kept because it's already done and because finding viewpoint at human eye height is a more natural composition tool than orbit. If maintenance cost ever becomes painful, demoting walk mode to a feature flag and using orbit + scenic-default as the primary flow is on the table.
 - **Why was Phase 2.5 (Stylization) inserted between Phase 2 and Phase 3?** The vision-diagnostic review (2026-04-28) revealed that the documented roadmap had stylization in Phase 6 (WebGL shaders) or Phase 7 (ML), but the user's stated artistic intent had stylization as the project's *signature*. Six phases of photorealism work before the signature feature shipped contradicted the goal. Stylization moved to 2.5 to ship the signature early — even one simple style (pointillism) on a half-built scene proves the painterly pipeline. Later phases keep adding scene fidelity (vegetation, landmarks, multi-sensory layers) but every export from 2.5 onward is the stylized image, not the photoreal one. Pointillism was chosen as v0 over Hockney-flat-on-polygons because a reference algorithm exists and the wind-direction binding is clean; Hockney remains a post-v0 candidate. The user-triggered (not real-time) model was decided in the same diagnostic and is documented in the user's memory `panorama_stylization_ux.md`.
+- **Why did Phase 3 become painter-side, not 3D? (2026-05-01)** The v3.6 chore (commit `d7cd185`) deleted the 3D OSM rendering pipeline because the in-scene 3D versions had become composition-distracting (offset textures, unwanted extrusions) and Path B had already declared the 3D scene composition scaffolding only. Restoring 3D vegetation / 3D landmark builders for Phase 3 would have reintroduced exactly the problems v3.6 removed. The artistic intent of Phase 3 — *forests read as forests, landmarks visible* — was preserved instead by adding two new painter modules that draw painterly canopy stipple and archetypal landmark silhouettes directly into the underpainting before the Pointillism stroke pass. This decision affects three modules (Style, OSM, UI) and is the canonical example of "if a Phase needs 3D today, ask whether the painter could express the same signal first." Trade-offs accepted: per-tree visibility (a single mapped `natural=tree` node) is lost — a forest reads as a textured zone, not as individuated trees, by design at this scope. If per-tree expression is wanted later, it lands as a `paintIndividualTrees` painter that draws one mark per node, in `src/style/`, not as 3D.
 
 Add a new entry here whenever a decision affects more than one module.
