@@ -191,6 +191,15 @@ Faithful implementation of `guillaume-gomez/to-pointillism`:
 | Spike prototypes before main build                                | P0       |
 | v0 acceptance test                                                | P1       |
 | Recognisability test for 3D viewer                                | P1       |
+| Building silhouettes in painter (V2 Step 11) — projected polygons, no extrusion. Reuses `src/style/projection.js` from Step 4. | P2 |
+| Wave-line patterns inside water polygons (V2 Step 8) — marine wind direction → stroke patterns within water category. Step 4 ground polygons currently get a flat gradient instead. | P2 |
+| Weather influence on painter underpainting (V2 Step 5) — wind direction → cloud streak orientation, cloud cover → sky band density, humidity → horizon haze warmth, precipitation → rain streaks. Step 4 deliberately scoped to sun.phase only. | P2 |
+| Real astronomy (V2 Step 6) — moon, stars, milky way, aurora rendered into underpainting. | P2 |
+| Atmospheric phenomena (V2 Step 7) — rainbow at anti-solar point, halos, sundogs. | P2 |
+| Wildlife (V2 Step 9) — eBird-driven bird flock marks. | P2 |
+| Painter ground polygons use flat-Y projection (Step 4 v0) — every polygon vertex assumed at observer's groundY, ignoring local terrain elevation. Increasingly inaccurate at distance / on hilly terrain. Fix: per-vertex HeightSampler call at snapshot-assembly time, with a small spatial cache. Defer until painter→Path-B migration touches the snapshot pipeline anyway. | P2 |
+| Painter ground polygons skip `bare_rock` and `scree` tags (not in the 5 painter categories). The 3D scene still renders these. Add a 6th painter category "rocky" if alpine presets read poorly. | P2 |
+| Per-source cache TTL table for V2 painter snapshot data | P2 |
 
 ## 13. Open questions for project owner
 

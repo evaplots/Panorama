@@ -189,6 +189,42 @@ function splitBbox(south, west, north, east, lat) {
 }
 
 /**
+ * Read ONE tile from cache without ever issuing a network request. Returns
+ * `null` if the tile isn't cached yet. Skips the `Cache.dedupe` coalescer on
+ * purpose — we don't want to await an in-flight scene-rebuild fetch; we want
+ * "what's in cache *right now*". A null return is a signal to the painter to
+ * leave that tile's polygons out of this paint.
+ */
+async function peekTile(s, w, n, e) {
+  const key = tileKey(s, w, n, e);
+  return (await Cache.get(key)) ?? null;
+}
+
+/** Same as fetchTilesForArea but cache-only — never triggers Overpass. */
+async function peekTilesForArea(location, preset) {
+  const radius = Math.min(preset.osmRadius, 5000);
+  const { south, west, north, east } = bboxAround(location, radius);
+  const tiles = splitBbox(south, west, north, east, location.lat);
+
+  const results = await Promise.all(
+    tiles.map(([s, w, n, e]) => peekTile(s, w, n, e))
+  );
+
+  const seen = new Set();
+  const merged = [];
+  for (const r of results) {
+    if (!r?.elements) continue;
+    for (const el of r.elements) {
+      const id = `${el.type}:${el.id}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      merged.push(el);
+    }
+  }
+  return merged;
+}
+
+/**
  * Fetch ALL tiles covering the OSM radius and return de-duplicated raw elements.
  * Tiles are dispatched together but execute strictly serially via overpassQueue.
  */
@@ -263,6 +299,22 @@ export const OSMFetcher = {
    */
   async fetchGroundCover(location, preset) {
     const elements = await fetchTilesForArea(location, preset);
+    const filtered = elements.filter(el =>
+      el.tags && (el.tags.natural || el.tags.landuse || el.tags.leisure || el.tags.waterway)
+    );
+    return elementsToPolygons(filtered);
+  },
+
+  /**
+   * Cache-only variant of `fetchGroundCover`. Never issues a network request;
+   * never blocks on an in-flight Overpass call. Returns `[]` when nothing is
+   * cached for this area yet (cold cache, or fetch still in flight). Designed
+   * for the painter's snapshot-assembly path: paint-time should never be
+   * gated on a 10–60 s Overpass round trip; the next paint after the scene
+   * rebuild lands picks up the polygons automatically.
+   */
+  async peekGroundCover(location, preset) {
+    const elements = await peekTilesForArea(location, preset);
     const filtered = elements.filter(el =>
       el.tags && (el.tags.natural || el.tags.landuse || el.tags.leisure || el.tags.waterway)
     );
