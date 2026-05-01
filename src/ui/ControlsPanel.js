@@ -15,6 +15,7 @@ import { CameraController } from '../camera/CameraController.js';
 import { HeightSampler } from '../terrain/HeightSampler.js';
 import { OSMFetcher } from '../osm/OSMFetcher.js';
 import { WeatherFetcher } from '../weather/WeatherFetcher.js';
+import { mergeWeather } from '../weather/mergeWeather.js';
 import { categorise } from '../style/categories.js';
 import { PRESETS, DEFAULT_PRESET, EYE_HEIGHT_M } from '../config.js';
 
@@ -25,54 +26,6 @@ function resolvePainterOpts() {
     return { palette: palettes[painter].colors };
   }
   return {}; // colorthief / 'auto' — let applyPointillism extract from source
-}
-
-/**
- * Compose the effective WeatherSnapshot from a fetched snapshot (possibly
- * null) and the user's overrides (each field null = take fetched value;
- * a number = use the override). Returns:
- *   - undefined when both fetched is null AND every override is null
- *     (the offline-curation panel hasn't been touched and the cache is
- *     cold — painter falls back to its gradient-only path).
- *   - a WeatherSnapshot-shaped object when at least one source is present.
- *
- * Per-field rule: override wins if finite, else fetched value, else null.
- */
-function mergeWeather(fetched, overrides) {
-  const o = overrides ?? {};
-  const oWind = o.wind ?? {};
-  const fWind = fetched?.wind ?? {};
-
-  const pick = (override, fallback) =>
-    Number.isFinite(override) ? override : (fallback ?? null);
-
-  const merged = {
-    wind: {
-      directionDeg: pick(oWind.directionDeg, fWind.directionDeg),
-      speedMs:      pick(oWind.speedMs,      fWind.speedMs),
-      gustMs:       fWind.gustMs ?? null, // not user-overridable at v0
-    },
-    cloudCover_pct:    pick(o.cloudCover_pct,    fetched?.cloudCover_pct),
-    humidity_pct:      pick(o.humidity_pct,      fetched?.humidity_pct),
-    pressure_hPa:      fetched?.pressure_hPa ?? null, // not overridable at v0
-    temperature_C:     pick(o.temperature_C,     fetched?.temperature_C),
-    precipitation_mmh: pick(o.precipitation_mmh, fetched?.precipitation_mmh),
-    weatherCode:       fetched?.weatherCode ?? null,
-    timestamp:         fetched?.timestamp ?? null,
-  };
-
-  // Detect "fully empty" — all fields null. The painter binding code only
-  // looks at fields that are finite numbers, but returning undefined keeps
-  // bindings.weather absent under destructuring (matches the cold-cache,
-  // no-overrides behaviour from before this PR).
-  const anyValue =
-    Number.isFinite(merged.wind.directionDeg) ||
-    Number.isFinite(merged.wind.speedMs) ||
-    Number.isFinite(merged.cloudCover_pct) ||
-    Number.isFinite(merged.humidity_pct) ||
-    Number.isFinite(merged.precipitation_mmh) ||
-    Number.isFinite(merged.temperature_C);
-  return anyValue ? merged : undefined;
 }
 
 /**

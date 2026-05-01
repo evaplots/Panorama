@@ -57,8 +57,9 @@ const _state = {
   },
   // V2 Step 5: WeatherPanel overrides. Each field is null when the panel
   // input is empty (= use fetched value); a number when the user has typed
-  // an override. mergeWeather() in ControlsPanel applies the per-field
-  // override-wins-else-fetched composition.
+  // an override. mergeWeather() in src/weather/mergeWeather.js applies the
+  // per-field override-wins-else-fetched composition (consumed by both the
+  // paint-time bindings and Step 5b's live 3D scene weather).
   weatherOverrides: {
     wind: { directionDeg: null, speedMs: null },
     cloudCover_pct: null,

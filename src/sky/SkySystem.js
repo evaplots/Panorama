@@ -6,6 +6,13 @@ import { state } from '../state.js';
 
 let sky, sunLight, skyLight, ambientLight;
 let _renderer = null;
+let _scene = null;
+// Captured at init() so updateWeather() can scale the fog density and the
+// solar lights without storing per-frame baselines that would drift across
+// time-of-day updates.
+let _baseSunIntensityScale = 1;     // multiplied into sunLight intensity each frame
+let _baseFogDensity = 0;            // base value of scene.fog.density at init
+let _hasFogBase = false;
 
 /**
  * Convert colour temperature (Kelvin) to linear RGB.
@@ -33,6 +40,11 @@ export const SkySystem = {
    */
   init(scene, renderer) {
     _renderer = renderer;
+    _scene = scene;
+    if (scene.fog && Number.isFinite(scene.fog.density)) {
+      _baseFogDensity = scene.fog.density;
+      _hasFogBase = true;
+    }
 
     sky = new Sky();
     sky.scale.setScalar(450000);
@@ -86,8 +98,9 @@ export const SkySystem = {
       sunPos.phase === 'goldenHour' ? 7 :
       SKY.turbidity;
 
-    // Sun light: fade out below horizon
-    const sunIntensity = Math.max(0, Math.sin(el)) * 2.5;
+    // Sun light: fade out below horizon, then scale by the weather-driven
+    // cloud-cover factor (Step 5b — set by updateWeather()).
+    const sunIntensity = Math.max(0, Math.sin(el)) * 2.5 * _baseSunIntensityScale;
     sunLight.intensity = sunIntensity;
     sunLight.position.copy(sunVec.clone().multiplyScalar(150000));
     const rgb = kelvinToRGB(sunPos.colourTempK);
@@ -109,4 +122,36 @@ export const SkySystem = {
   },
 
   getDirectionalLight() { return sunLight; },
+
+  /**
+   * V2 Step 5b — atmospheric modulations driven by the live WeatherSnapshot.
+   * Two effects, both no-op on cold cache (weather null/undefined):
+   *
+   *   • Fog density scales by humidity. 50% humidity is the baseline; 100%
+   *     doubles the fog, dry air halves it. Floor at 30% so fully-arid air
+   *     doesn't reveal terrain seams that the painter expects to dissolve.
+   *   • Sun intensity dims by cloud cover, capped at 50% at full overcast.
+   *     Stored as a multiplicative scale so the per-frame `update()` (which
+   *     re-derives intensity from sun altitude) keeps respecting it without
+   *     us recomputing the altitude curve here.
+   *
+   * Tone-mapping exposure is left alone — it tracks sun altitude in update()
+   * and shouldn't be coupled to weather (a bright overcast scene at noon
+   * should still expose at noon levels, just with a dimmer key light).
+   *
+   * @param {import('../weather/WeatherFetcher.js').WeatherSnapshot|null|undefined} weather
+   */
+  updateWeather(weather) {
+    // Fog: humidity → density multiplier
+    if (_hasFogBase && _scene?.fog) {
+      const h = weather?.humidity_pct;
+      const mult = Number.isFinite(h)
+        ? Math.max(0.3, 1 + (h - 50) / 50)
+        : 1;
+      _scene.fog.density = _baseFogDensity * mult;
+    }
+    // Sun: cloud cover → intensity dim factor (consumed by the next update())
+    const c = weather?.cloudCover_pct;
+    _baseSunIntensityScale = Number.isFinite(c) ? 1 - c / 200 : 1;
+  },
 };

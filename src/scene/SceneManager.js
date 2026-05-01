@@ -6,6 +6,10 @@ import { ScenicDefault } from '../camera/ScenicDefault.js';
 import { TerrainBuilder } from '../terrain/TerrainBuilder.js';
 import { OSMFeatureBuilder } from '../osm/index.js';
 import { WeatherFetcher } from '../weather/WeatherFetcher.js';
+import { mergeWeather } from '../weather/mergeWeather.js';
+import { CloudLayer } from '../sky/CloudLayer.js';
+import { Precipitation } from '../sky/Precipitation.js';
+import { HeightSampler } from '../terrain/HeightSampler.js';
 import { state } from '../state.js';
 import {
   PRESETS, DEFAULT_PRESET, EYE_HEIGHT_M,
@@ -23,6 +27,16 @@ let _lastTickTime = 0;
 // (Cache.dedupe inside fetchWeather is the belt-and-braces backup).
 let _lastWarmedWeatherKey = null;
 let _weatherWarmToken = 0;
+// Live weather snapshot consumed by CloudLayer/Precipitation/SkySystem each
+// frame. Refreshed only on the four events that can change it (location,
+// time, fetch land, override panel) so tick() stays sync. mergeWeather
+// returns undefined when both fetched and every override are null — we
+// store that as null here for consistent "no weather" semantics.
+let _currentWeather = null;
+// Hand off the just-loaded terrain's groundY-at-observer to the per-frame
+// dispatch so Precipitation knows where to respawn particles. -1.7 is the
+// pre-terrain default (camera Y for a ground at sea level minus eye height).
+let _observerGroundY = 0;
 
 /**
  * Fire-and-forget Open-Meteo warm. Gated on the hour-bucket key so that a
@@ -52,6 +66,32 @@ function warmWeather() {
     if (myToken !== _weatherWarmToken) return;
     console.warn('[SceneManager] weather warm failed:', err.message);
   });
+}
+
+/**
+ * Refresh `_currentWeather` from the cache + override state. Cheap when
+ * the cache hits in-memory; the per-frame `tick()` then reads the cached
+ * snapshot synchronously rather than awaiting a peek per frame. Called on
+ * `location:changed`, `time:changed`, `weather:fetched`, and
+ * `weatherOverride:changed` — the four events that can change the merged
+ * snapshot.
+ */
+async function refreshCurrentWeather() {
+  const location = state.get('location');
+  const timestamp = state.get('time.timestamp');
+  if (!location || !timestamp) {
+    _currentWeather = null;
+    return;
+  }
+  let fetched = null;
+  try {
+    fetched = await WeatherFetcher.peekWeather(location, timestamp);
+  } catch (err) {
+    console.warn('[SceneManager] weather peek failed:', err.message);
+  }
+  const overrides = state.get('weatherOverrides');
+  const merged = mergeWeather(fetched, overrides);
+  _currentWeather = merged ?? null;
 }
 
 function disposeGroup(group) {
@@ -145,6 +185,10 @@ function tick() {
   const location = state.get('location');
   const timeSpec = state.get('time');
 
+  // Apply live-weather modulations *before* SkySystem.update so the
+  // sun-intensity scale set by updateWeather feeds into the same-frame
+  // intensity calculation in update().
+  SkySystem.updateWeather(_currentWeather);
   SkySystem.update(timeSpec.timestamp, location);
 
   const sun = state.get('sun');
@@ -153,6 +197,21 @@ function tick() {
   }
 
   CameraController.update(dt);
+
+  // Live 3D weather. Both modules are camera-relative — they translate with
+  // the observer so the user sees the same cloud field and rain volume
+  // regardless of where they walk to within the terrain bounds. Cold
+  // snapshot (null) → CloudLayer hides all sprites and Precipitation pulls
+  // its draw range to 0.
+  if (location) {
+    const camPos = camera.position;
+    const groundY = HeightSampler.isReady()
+      ? HeightSampler.getHeightAt(location.lat, location.lon)
+      : _observerGroundY;
+    CloudLayer.update(_currentWeather, dt, camPos, location);
+    Precipitation.update(_currentWeather, dt, camPos, groundY, location);
+  }
+
   renderer.render(scene, camera);
 
   const dbg = window.__panoramaDebug;
@@ -173,18 +232,35 @@ export const SceneManager = {
     renderer = Renderer.init(canvas);
     camera = CameraController.init(canvas);
     SkySystem.init(scene, renderer);
+    CloudLayer.init(scene);
+    Precipitation.init(scene);
 
     state.on('location:changed', () => {
       // location change always crosses the per-location bucket key; reset
       // so warmWeather doesn't no-op on the new lat/lon.
       _lastWarmedWeatherKey = null;
+      // Re-init the live-weather modules so their world-space anchors and
+      // (CloudLayer's) deterministic per-place layout track the new observer.
+      // The next tick() picks up the new location automatically.
+      CloudLayer.dispose();
+      Precipitation.dispose();
+      CloudLayer.init(scene);
+      Precipitation.init(scene);
       rebuild();
       warmWeather();
+      refreshCurrentWeather();
     });
     state.on('preset:changed', () => {
       if (state.get('location')) rebuild();
     });
-    state.on('time:changed', warmWeather);
+    state.on('time:changed', () => {
+      warmWeather();
+      refreshCurrentWeather();
+    });
+    // Newly-landed cache entry — pull it into _currentWeather between frames.
+    state.on('weather:fetched', refreshCurrentWeather);
+    // Override panel input typed/cleared — re-merge without a peek round-trip.
+    state.on('weatherOverride:changed', refreshCurrentWeather);
 
     window.addEventListener('resize', () => Renderer.handleResize(canvas, camera));
 
@@ -200,6 +276,8 @@ export const SceneManager = {
     rebuildTokenCounter = Infinity;
     if (currentTerrainGroup) disposeGroup(currentTerrainGroup);
     if (currentOSMGroup) disposeGroup(currentOSMGroup);
+    CloudLayer.dispose();
+    Precipitation.dispose();
     renderer.dispose();
   },
 };
