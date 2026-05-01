@@ -76,7 +76,16 @@ export const ControlsPanel = {
         const sctx = snap.getContext('2d');
         sctx.drawImage(webglCanvas, 0, 0);
 
-        const { canvas: stylized, timing } = await applyPointillism(snap);
+        // TODO: once a canonical state.paperSize / state.orientation lands
+        // (Snapshot contract per STRATEGY-V2 §"The Snapshot"), read from
+        // there. For now those paths don't exist, so fall back to A3 portrait.
+        const targetPaperSize = state.get('paperSize') ?? 'A3';
+        const targetOrientation = state.get('orientation') ?? 'portrait';
+
+        const { canvas: stylized, timing } = await applyPointillism(snap, {
+          targetPaperSize,
+          targetOrientation,
+        });
         console.log('[Pointillism] timing:', timing);
 
         // Open result in a new window with the timing summary.
@@ -89,6 +98,9 @@ export const ControlsPanel = {
           info.innerHTML = `
             <strong>Pointillism v0.1 perf</strong><br>
             Source: ${timing.megapixels} MP &middot; Strokes: ${timing.strokeCount.toLocaleString()}<br>
+            Effective DPI: <strong>${timing.effectiveDpi}</strong> &middot;
+              Target: ${timing.targetPaperSize} ${timing.targetOrientation} &middot;
+              Stroke px: <strong>${timing.brushThicknessPx}</strong><br>
             Total: <strong>${timing.totalMs} ms</strong>
             (gradient ${timing.gradientMs} ms, strokes ${timing.strokesMs} ms)<br>
             Projected A3 @ 300 DPI (17.4 MP, linear): <strong>${timing.projectedA3Ms} ms</strong>

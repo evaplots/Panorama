@@ -7,6 +7,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "format": "prettier --write src/",
+    "test": "node scripts/test-stroke-scale.js",
     "pointillism": "node scripts/pointillism-test.js",
     "gallery": "node scripts/build-gallery.js",
     "matrix": "node scripts/build-matrix-gallery.js",
