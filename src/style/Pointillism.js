@@ -3,11 +3,8 @@ import {
   extractPalette,
   extendPalette as extendPaletteFn,
   smoothGradient,
-  medianBlur11,
 } from './algorithm.js';
-import { paintGround } from './groundPainter.js';
-import { paintCanopy } from './canopyPainter.js';
-import { paintLandmarks } from './landmarkPainter.js';
+import { renderUnderpainting } from './underpainting.js';
 
 // ISO A-series short-edge in mm. The "short edge" is the same regardless of
 // orientation — A3 is 297×420 mm, so portrait short = landscape short = 297.
@@ -148,87 +145,33 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
   const createCanvas = o.createCanvas || browserCreateCanvas;
   const rand = mulberry32(o.seed);
 
-  // Step 4 + V2 vegetation/landmarks: if data bindings are present, draw
-  // ground polygons, canopy stipple, and landmark silhouettes onto a working
-  // copy of the source so the median-blur underpainting + gradient field both
-  // see the painter's category zones. The original `sourceCanvas` is left
-  // untouched and is also used as the palette-extraction source — see the
-  // dedicated read below.
+  // ─── Underpainting (delegate) ────────────────────────────────────────────
+  // Working canvas + paintGround + paintCanopy + paintLandmarks + optional
+  // median-blur softening. Lives in src/style/underpainting.js so the live
+  // UnderpaintingPreviewPanel can run the same code path without paying the
+  // multi-second cost of palette / gradient / strokes.
   //
-  // Order matters: ground (broad fills) → canopy (stipple over forest fills)
-  // → landmarks (silhouettes on top). Each subsequent painter sees the
-  // partially-painted working canvas. The median blur downstream softens
-  // dab + silhouette edges into the rest of the painting; the gradient
-  // smoothing further dissolves anything thinner than ~10–15 px so the
-  // marks must be drawn at painted scale (canopy uses brushThicknessPx;
-  // landmarks min-size at 4 px high).
-  //
-  // Each painter gets its own PRNG forked from the master seed via XOR salt
-  // so canopy / landmark consumption doesn't shift the stroke-pass `rand`.
-  let workingCanvas = sourceCanvas;
-  let groundPolygonCount = 0;
-  let canopyDabCount = 0;
-  let landmarkDrawnCount = 0;
-  let canopyMs = 0;
-  let landmarkMs = 0;
-  if (o.bindings?.viewpoint && o.bindings?.ground) {
-    const w = createCanvas(width, height);
-    const wctx = w.getContext('2d');
-    wctx.drawImage(sourceCanvas, 0, 0);
-    const vp = o.bindings.viewpoint;
-    const projectionCtx = {
-      originLat: vp.location.lat,
-      originLon: vp.location.lon,
-      azimuthDeg: vp.azimuthDeg,
-      elevationDeg: vp.elevationDeg,
-      fovDeg: vp.fovDeg,
-      cameraWorldY: vp.cameraWorldY,
-      groundY: vp.groundY,
-      canvasWidth: width,
-      canvasHeight: height,
-    };
-    groundPolygonCount = paintGround(wctx, projectionCtx, o.bindings.ground, o.bindings.sun);
-
-    // Forest canopy stipple. Uses the same brushThicknessPx the stroke pass
-    // will use, so canopy texture matches stroke density at the chosen DPI.
-    // Computed early here (duplicating computeEffectiveDpi below) because
-    // we need it for the canopy dab radius.
-    const effectiveDpiForCanopy = o.dpi != null
-      ? o.dpi
-      : computeEffectiveDpi(width, height, o.targetPaperSize, o.targetOrientation);
-    const brushThicknessForCanopy = Math.max(
-      1,
-      Math.round(o.brushWidthMm * effectiveDpiForCanopy / 25.4),
-    );
-
-    const tCanopyStart = performance.now();
-    const canopyResult = paintCanopy(
-      wctx,
-      projectionCtx,
-      o.bindings.ground,
-      o.bindings.sun,
-      { rand: mulberry32(o.seed ^ 0xC4_C4_C4_C4), brushThicknessPx: brushThicknessForCanopy },
-    );
-    canopyMs = +(performance.now() - tCanopyStart).toFixed(1);
-    canopyDabCount = canopyResult.dabCount;
-
-    const tLandmarkStart = performance.now();
-    const landmarkResult = paintLandmarks(
-      wctx,
-      projectionCtx,
-      o.bindings.ground.landmarks,
-      o.bindings.sun,
-      { rand: mulberry32(o.seed ^ 0x14_14_14_14) },
-    );
-    landmarkMs = +(performance.now() - tLandmarkStart).toFixed(1);
-    landmarkDrawnCount = landmarkResult.drawnCount;
-
-    workingCanvas = w;
-  }
-
-  const srcCtx = workingCanvas.getContext('2d', { willReadFrequently: true });
-  const srcData = srcCtx.getImageData(0, 0, width, height);
-  const tRead = performance.now();
+  // Each painter forks its own Mulberry32 from `o.seed` via the same XOR
+  // salts (canopy: seed^0xC4_C4_C4_C4, landmarks: seed^0x14_14_14_14) so
+  // canopy / landmark consumption doesn't shift the stroke-pass `rand`
+  // below. Byte-parity with pre-refactor output is enforced by
+  // scripts/parity-probe.js.
+  const { canvas: out, srcData, timing: underTiming } = await renderUnderpainting(
+    sourceCanvas,
+    {
+      bindings: o.bindings,
+      brushWidthMm: o.brushWidthMm,
+      targetPaperSize: o.targetPaperSize,
+      targetOrientation: o.targetOrientation,
+      dpi: o.dpi,
+      softenEdges: o.applyMedianUnderpaint,
+      medianKernel: o.medianKernel,
+      seed: o.seed,
+      createCanvas,
+    },
+  );
+  const ctx = out.getContext('2d');
+  const tUnder = performance.now();
 
   // ─── Palette: extract or accept ──────────────────────────────────────────
   // Palette extraction reads from the *original* sourceCanvas, never the
@@ -236,37 +179,21 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
   // their flat-gradient fills bias median-cut toward earth tones and starve
   // the sky band of warm/cool tones at stroke time — the painter then paints
   // sky pixels in earth colours. Underpainting + gradient still read from
-  // the working canvas (srcData) above, so polygons still appear in the
-  // painted output.
+  // the post-painter `srcData` returned by renderUnderpainting above, so
+  // polygons still appear in the painted output.
   let palette;
   if (Array.isArray(o.palette) && o.palette.length > 0) {
     palette = o.palette.map(c => [c[0], c[1], c[2]]);
   } else {
-    const paletteSourceData = workingCanvas === sourceCanvas
-      ? srcData
-      : sourceCanvas.getContext('2d', { willReadFrequently: true })
-          .getImageData(0, 0, width, height);
+    const paletteSourceData = sourceCanvas
+      .getContext('2d', { willReadFrequently: true })
+      .getImageData(0, 0, width, height);
     palette = extractPalette(paletteSourceData, o.paletteSize);
   }
   if (o.extendPalette) {
     palette = extendPaletteFn(palette, o.paletteSatBoost, o.paletteHueJitter, rand);
   }
   const tPalette = performance.now();
-
-  // ─── Median-blur underpainting ───────────────────────────────────────────
-  const out = createCanvas(width, height);
-  const ctx = out.getContext('2d');
-  if (o.applyMedianUnderpaint) {
-    const medianRGBA = medianBlur11(srcData.data, width, height, o.medianKernel);
-    // ctx.createImageData works in both browser and node-canvas; the global
-    // ImageData constructor is browser-only, so we route through ctx.
-    const underData = ctx.createImageData(width, height);
-    underData.data.set(medianRGBA);
-    ctx.putImageData(underData, 0, 0);
-  } else {
-    ctx.drawImage(workingCanvas, 0, 0);
-  }
-  const tUnder = performance.now();
 
   // ─── Gradient: greyscale → Scharr → smooth ──────────────────────────────
   const gray = toGrayscale(srcData);
@@ -417,10 +344,9 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
   const tEnd = performance.now();
 
   const timing = {
-    readImageDataMs: +(tRead - t0).toFixed(1),
-    paletteMs: +(tPalette - tRead).toFixed(1),
-    underpaintMs: +(tUnder - tPalette).toFixed(1),
-    grayscaleMs: +(tGray - tUnder).toFixed(1),
+    underpaintMs: +(tUnder - t0).toFixed(1),
+    paletteMs: +(tPalette - tUnder).toFixed(1),
+    grayscaleMs: +(tGray - tPalette).toFixed(1),
     gradientMs: +(tGrad - tGray).toFixed(1),
     strokesMs: +(tEnd - tGrad).toFixed(1),
     totalMs: +(tEnd - t0).toFixed(1),
@@ -431,11 +357,13 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
     targetPaperSize: o.targetPaperSize,
     targetOrientation: o.targetOrientation,
     megapixels: +(width * height / 1e6).toFixed(2),
-    groundPolygonCount,
-    canopyDabCount,
-    canopyMs,
-    landmarkDrawnCount,
-    landmarkMs,
+    groundPolygonCount: underTiming.groundPolygonCount,
+    canopyDabCount: underTiming.canopyDabCount,
+    canopyMs: underTiming.canopyMs,
+    landmarkDrawnCount: underTiming.landmarkDrawnCount,
+    landmarkMs: underTiming.landmarkMs,
+    medianMs: underTiming.medianMs,
+    paintMs: underTiming.paintMs,
   };
   timing.projectedA3Ms = +(timing.totalMs * 17.4 / timing.megapixels).toFixed(0);
 

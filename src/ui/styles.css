@@ -730,3 +730,99 @@ input[type="range"] {
   pointer-events: none;
   text-shadow: 0 1px 4px rgba(0,0,0,.8);
 }
+
+/* ── Underpainting preview overlay ── */
+.pano-preview-panel {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  background: rgba(18, 18, 42, 0.92);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 8px 6px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.4);
+  z-index: 20;
+  pointer-events: all;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pano-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+}
+
+.pano-preview-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--accent2);
+}
+
+.pano-preview-close {
+  background: transparent;
+  border: 0;
+  color: rgba(255,255,255,.55);
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.pano-preview-close:hover { color: var(--fg); background: rgba(255,255,255,.06); }
+
+.pano-preview-canvas {
+  display: block;
+  border-radius: 4px;
+  background: #000;
+  /* dimensions set inline by JS */
+}
+
+.pano-preview-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 2px 0;
+  font-size: 11px;
+  color: rgba(255,255,255,.65);
+}
+
+.pano-preview-soften {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pano-preview-soften input { cursor: pointer; }
+
+.pano-preview-stat {
+  font-variant-numeric: tabular-nums;
+  color: rgba(255,255,255,.55);
+}
+.pano-preview-stat.is-error { color: #ff7070; }
+
+/* Show/hide toggle in sidebar */
+.pano-preview-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--fg);
+  user-select: none;
+}
+.pano-preview-toggle input { cursor: pointer; }

@@ -11,16 +11,11 @@ import { createWeatherPanel } from './WeatherPanel.js';
 import { createPainterParamsPanel } from './PainterParamsPanel.js';
 import { createOutputPanel } from './OutputPanel.js';
 import { createTerrainPanel } from './TerrainPanel.js';
+import { createUnderpaintingPreviewPanel } from './UnderpaintingPreviewPanel.js';
 import palettes from '../style/palettes.json';
 import { desaturatePalette } from '../style/algorithm.js';
 import { state } from '../state.js';
-import { CameraController } from '../camera/CameraController.js';
-import { HeightSampler } from '../terrain/HeightSampler.js';
-import { OSMFetcher } from '../osm/OSMFetcher.js';
-import { WeatherFetcher } from '../weather/WeatherFetcher.js';
-import { mergeWeather } from '../weather/mergeWeather.js';
-import { categorise } from '../style/categories.js';
-import { PRESETS, DEFAULT_PRESET, EYE_HEIGHT_M } from '../config.js';
+import { buildSnapshot } from '../snapshot.js';
 
 function resolvePainterOpts() {
   const painter = state.get('style.painter');
@@ -29,89 +24,6 @@ function resolvePainterOpts() {
     return { palette: palettes[painter].colors };
   }
   return {}; // colorthief / 'auto' — let applyPointillism extract from source
-}
-
-/**
- * Build the StyleBindings snapshot at trigger time. Returns null when no
- * location is set — the painter then falls back to its pre-Step-4 path of
- * consuming the rendered canvas verbatim.
- *
- * `ground.osmFeatures` is read **cache-only** via `OSMFetcher.peekGroundCover`
- * — paint-time must never block on a fresh Overpass fetch (10–60 s). When the
- * cache is cold or the scene-rebuild fetch is still in flight, this returns
- * `osmFeatures: []` and the painter no-ops the polygon pass. Subsequent paints
- * after the scene rebuild lands pick up the polygons automatically.
- */
-async function buildBindings() {
-  const location = state.get('location');
-  if (!location) return null;
-
-  const vp = CameraController.getViewpoint();
-  const groundY = HeightSampler.isReady()
-    ? HeightSampler.getHeightAt(location.lat, location.lon)
-    : 0;
-  const eyeHeight = vp.eyeHeight ?? EYE_HEIGHT_M;
-  const cameraWorldY = groundY + eyeHeight;
-
-  const presetName = state.get('preset');
-  const preset = PRESETS[presetName] ?? PRESETS[DEFAULT_PRESET];
-
-  let osmFeatures = [];
-  let landmarks = [];
-  try {
-    const polygons = await OSMFetcher.peekGroundCover(location, preset);
-    osmFeatures = polygons
-      .map(p => {
-        const category = categorise(p.tags);
-        if (!category) return null;
-        return { tags: p.tags, category, outer: p.outer, inners: p.inners };
-      })
-      .filter(Boolean);
-  } catch (err) {
-    console.warn('[ControlsPanel] OSM cache peek failed at paint time, painting without polygons:', err.message);
-  }
-  // Landmarks share the same combined-query cache, so a successful ground
-  // peek implies a successful landmark peek. Wrapped in its own try anyway
-  // so a tag-classification bug in elementsToLandmarks doesn't blank out
-  // ground polygons (which are the higher-impact rendering layer).
-  try {
-    landmarks = await OSMFetcher.peekLandmarks(location, preset);
-  } catch (err) {
-    console.warn('[ControlsPanel] OSM landmark peek failed at paint time, painting without landmarks:', err.message);
-  }
-
-  const timestamp = state.get('time.timestamp');
-
-  // Weather peek is cache-only (mirrors OSM peek). Cold cache → null fetched,
-  // and mergeWeather composes a snapshot from overrides alone (offline path).
-  // `weather` is undefined when both fetched and every override is null, which
-  // keeps the optional `weather` field in StyleBindings cleanly absent under
-  // destructuring — same shape the painter saw before this PR.
-  let fetched = null;
-  try {
-    fetched = await WeatherFetcher.peekWeather(location, timestamp);
-  } catch (err) {
-    console.warn('[ControlsPanel] Weather cache peek failed at paint time, falling back to overrides only:', err.message);
-  }
-  const overrides = state.get('weatherOverrides');
-  const weather = mergeWeather(fetched, overrides);
-
-  return {
-    sun: state.get('sun'),
-    timestamp,
-    location,
-    viewpoint: {
-      location,
-      azimuthDeg: vp.azimuth,
-      elevationDeg: vp.elevation,
-      fovDeg: vp.fov,
-      eyeHeightM: eyeHeight,
-      cameraWorldY,
-      groundY,
-    },
-    ground: { osmFeatures, landmarks },
-    weather,
-  };
 }
 
 export const ControlsPanel = {
@@ -134,6 +46,39 @@ export const ControlsPanel = {
     createOutputPanel(sidebar);
     createModeToggle(sidebar);
     createDebugOverlay();
+
+    // ── Underpainting preview overlay ──────────────────────────────────
+    // Floats over the 3D viewer (bottom-right). Local toggle owns the
+    // visible/hidden state; default visible. No persistence — show/hide
+    // resets to default on reload, intentionally minimal until curation
+    // tells us what the persistence shape should be.
+    let previewHandle = null;
+    const previewToggle = document.createElement('label');
+    previewToggle.className = 'pano-preview-toggle';
+    previewToggle.innerHTML = `
+      <span>Live preview</span>
+      <input type="checkbox" checked />
+    `;
+    sidebar.appendChild(previewToggle);
+    const previewCheckbox = previewToggle.querySelector('input');
+    function mountPreview() {
+      if (previewHandle) return;
+      previewHandle = createUnderpaintingPreviewPanel(rootEl, {
+        onClose: () => {
+          previewCheckbox.checked = false;
+          unmountPreview();
+        },
+      });
+    }
+    function unmountPreview() {
+      previewHandle?.destroy();
+      previewHandle = null;
+    }
+    previewCheckbox.addEventListener('change', () => {
+      if (previewCheckbox.checked) mountPreview();
+      else unmountPreview();
+    });
+    mountPreview();
 
     // Export section
     const exportSection = document.createElement('div');
@@ -193,7 +138,7 @@ export const ControlsPanel = {
         const targetPaperSize = state.get('export.format');
         const targetOrientation = state.get('export.orientation');
 
-        const bindings = await buildBindings();
+        const bindings = await buildSnapshot();
 
         // Bridge weather → painter opts (DATA-CONTRACTS v0 bindings). All
         // derivations happen at the call site per the brief — the Pointillism

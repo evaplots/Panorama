@@ -1,0 +1,223 @@
+// Underpainting renderer — every step that runs BEFORE the pointillism
+// stroke pass. Extracted from Pointillism.js so it can run independently
+// for the live UnderpaintingPreviewPanel without paying the multi-second
+// cost of palette / gradient / strokes.
+//
+// What this owns:
+//   1. Allocate a working copy of the source canvas (so the input isn't
+//      mutated)
+//   2. paintGround   — broad colour fills from OSM ground-cover polygons
+//   3. paintCanopy   — stippled canopy over forest / wood polygons (PR #12)
+//   4. paintLandmarks — silhouette marks for towers / churches / etc (PR #12)
+//   5. Optional 11×11 median-blur softening (controlled by `softenEdges`,
+//      default true) — same step Pointillism uses to give the stroke pass
+//      cleanly bounded colour masses to bite into
+//
+// What this does NOT own:
+//   - ColorThief / palette extraction
+//   - Scharr / Gaussian gradient field
+//   - Weighted-random palette sampling
+//   - Stroke pass
+//
+// Determinism contract: the canopy and landmark painters fork their PRNGs
+// from `opts.seed` via the same XOR salts Pointillism uses
+// (canopy: seed^0xC4_C4_C4_C4, landmarks: seed^0x14_14_14_14). Same
+// sourceCanvas + same opts → same output canvas, byte-identical.
+
+import { paintGround } from './groundPainter.js';
+import { paintCanopy } from './canopyPainter.js';
+import { paintLandmarks } from './landmarkPainter.js';
+import { medianBlur11 } from './algorithm.js';
+
+// Inline copy of `computeEffectiveDpi` from Pointillism.js — kept local to
+// avoid the circular import that would otherwise arise (Pointillism imports
+// renderUnderpainting from this module). The formula is short enough that
+// duplication is cheaper than a third shared module; both copies derive
+// effective DPI as canvas-short-edge / paper-short-edge-in-inches.
+const PAPER_SHORT_EDGE_MM = { A4: 210, A3: 297, A2: 420 };
+function computeEffectiveDpi(canvasWidth, canvasHeight, paperSize) {
+  const paperShortMm = PAPER_SHORT_EDGE_MM[paperSize];
+  if (!paperShortMm) {
+    throw new Error(`renderUnderpainting: unknown paperSize "${paperSize}"`);
+  }
+  return Math.min(canvasWidth, canvasHeight) / (paperShortMm / 25.4);
+}
+
+const DEFAULTS = {
+  bindings: null,
+  brushWidthMm: 0.7,
+  targetPaperSize: 'A3',
+  targetOrientation: 'portrait',
+  dpi: null,
+  softenEdges: true,           // median-blur soften after the painters
+  medianKernel: 'auto',        // 'auto' scales 11 × shortEdge / 3508 (A3 ref);
+                               // an explicit odd integer pins it (Pointillism
+                               // pins 11 to preserve byte parity at A3).
+  seed: 0xC0FFEE,
+};
+
+// Auto-kernel scaling: the 11×11 reference was tuned for A3 short edge
+// (3508 px). Scale linearly with the canvas short edge so a 480-px-tall
+// preview gets a ~1.5 kernel (floor 3) instead of an A3-sized 11×11
+// that would smear small landmarks into mush. Always returns odd ≥ 3.
+function autoMedianKernel(canvasShortEdge) {
+  const A3_SHORT_PX = 3508;
+  const scaled = 11 * canvasShortEdge / A3_SHORT_PX;
+  let k = Math.max(3, Math.round(scaled));
+  if (k % 2 === 0) k += 1;
+  return k;
+}
+
+// Default canvas factory — used in browsers. Node tests inject their own
+// via opts.createCanvas (e.g. node-canvas's createCanvas).
+function browserCreateCanvas(width, height) {
+  const c = document.createElement('canvas');
+  c.width = width;
+  c.height = height;
+  return c;
+}
+
+// Mirrors mulberry32 in Pointillism.js. Duplicated rather than imported
+// so renderUnderpainting can run without booting the stroke pass module.
+function mulberry32(seed) {
+  return function () {
+    let t = (seed += 0x6D2B79F5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Build the underpainting on top of `sourceCanvas`. Pure function — does
+ * not mutate the input canvas; allocates and returns a new canvas with the
+ * painter steps applied.
+ *
+ * @param {HTMLCanvasElement} sourceCanvas  Pre-painter base. Today: the WebGL
+ *        snapshot from the 3D viewer (or a downscaled copy of it for the
+ *        live preview). Future: a from-scratch canvas synthesised from the
+ *        snapshot's sun + skyline + sky gradient (STRATEGY-V2 stage 1).
+ * @param {Partial<typeof DEFAULTS>} opts
+ * @returns {Promise<{canvas: HTMLCanvasElement, srcData: ImageData, timing: object}>}
+ *   `canvas`   — the output canvas to draw strokes on (or to display in
+ *                preview mode). When `softenEdges` is true this is the
+ *                median-blurred version; otherwise it's a copy of the
+ *                post-painter working canvas.
+ *   `srcData`  — post-painter, pre-median ImageData. Pointillism reads its
+ *                gradient field from this; the preview ignores it.
+ *   `timing`   — per-step ms + counts (groundPolygonCount, canopyDabCount,
+ *                landmarkDrawnCount, paintMs, medianMs).
+ */
+export async function renderUnderpainting(sourceCanvas, opts = {}) {
+  const o = { ...DEFAULTS, ...opts };
+  const createCanvas = o.createCanvas || browserCreateCanvas;
+  const { width, height } = sourceCanvas;
+
+  const tStart = performance.now();
+
+  // Working canvas: a copy of source that the painters mutate. We always
+  // allocate it (even when bindings are null) so the output canvas is
+  // independent of the input — the preview can hold onto it without the
+  // 3D viewer's next frame overwriting the bitmap.
+  const working = createCanvas(width, height);
+  const wctx = working.getContext('2d');
+  wctx.drawImage(sourceCanvas, 0, 0);
+
+  let groundPolygonCount = 0;
+  let canopyDabCount = 0;
+  let landmarkDrawnCount = 0;
+  let canopyMs = 0;
+  let landmarkMs = 0;
+
+  if (o.bindings?.viewpoint && o.bindings?.ground) {
+    const vp = o.bindings.viewpoint;
+    const projectionCtx = {
+      originLat: vp.location.lat,
+      originLon: vp.location.lon,
+      azimuthDeg: vp.azimuthDeg,
+      elevationDeg: vp.elevationDeg,
+      fovDeg: vp.fovDeg,
+      cameraWorldY: vp.cameraWorldY,
+      groundY: vp.groundY,
+      canvasWidth: width,
+      canvasHeight: height,
+    };
+
+    groundPolygonCount = paintGround(
+      wctx, projectionCtx, o.bindings.ground, o.bindings.sun,
+    );
+
+    // Canopy and landmark painters need the same brushThicknessPx the
+    // stroke pass uses, so canopy texture matches stroke density at the
+    // chosen DPI. Same formula as Pointillism's stroke-pass setup.
+    const effectiveDpi = o.dpi != null
+      ? o.dpi
+      : computeEffectiveDpi(width, height, o.targetPaperSize, o.targetOrientation);
+    const brushThicknessPx = Math.max(
+      1,
+      Math.round(o.brushWidthMm * effectiveDpi / 25.4),
+    );
+
+    const tCanopy = performance.now();
+    const canopyResult = paintCanopy(
+      wctx, projectionCtx, o.bindings.ground, o.bindings.sun,
+      { rand: mulberry32(o.seed ^ 0xC4_C4_C4_C4), brushThicknessPx },
+    );
+    canopyMs = +(performance.now() - tCanopy).toFixed(1);
+    canopyDabCount = canopyResult.dabCount;
+
+    const tLandmark = performance.now();
+    const landmarkResult = paintLandmarks(
+      wctx, projectionCtx, o.bindings.ground.landmarks, o.bindings.sun,
+      { rand: mulberry32(o.seed ^ 0x14_14_14_14) },
+    );
+    landmarkMs = +(performance.now() - tLandmark).toFixed(1);
+    landmarkDrawnCount = landmarkResult.drawnCount;
+  }
+
+  const tPaintEnd = performance.now();
+
+  // srcData is a snapshot of the post-painter working canvas. Pointillism
+  // reads its gradient field from this (NOT from the median-blurred output).
+  const srcData = wctx.getImageData(0, 0, width, height);
+
+  // Output canvas — what the stroke pass draws on, or what the preview
+  // displays. Median blur softens painter edges into the rest of the
+  // underpainting if softenEdges is on.
+  const out = createCanvas(width, height);
+  const ctx = out.getContext('2d');
+  let medianMs = 0;
+  let medianKernelUsed = 0;
+  if (o.softenEdges) {
+    const kernel = o.medianKernel === 'auto'
+      ? autoMedianKernel(Math.min(width, height))
+      : o.medianKernel;
+    medianKernelUsed = kernel;
+    const tMedian = performance.now();
+    const medianRGBA = medianBlur11(srcData.data, width, height, kernel);
+    const underData = ctx.createImageData(width, height);
+    underData.data.set(medianRGBA);
+    ctx.putImageData(underData, 0, 0);
+    medianMs = +(performance.now() - tMedian).toFixed(1);
+  } else {
+    ctx.drawImage(working, 0, 0);
+  }
+
+  const totalMs = +(performance.now() - tStart).toFixed(1);
+
+  return {
+    canvas: out,
+    srcData,
+    timing: {
+      groundPolygonCount,
+      canopyDabCount,
+      canopyMs,
+      landmarkDrawnCount,
+      landmarkMs,
+      paintMs: +(tPaintEnd - tStart).toFixed(1),
+      medianMs,
+      medianKernelUsed,
+      underpaintMs: totalMs,
+    },
+  };
+}
