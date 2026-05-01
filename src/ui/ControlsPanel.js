@@ -8,6 +8,9 @@ import { createModeToggle } from './ModeToggle.js';
 import { createDebugOverlay } from './DebugOverlay.js';
 import { createPalettePicker } from './PalettePicker.js';
 import { createWeatherPanel } from './WeatherPanel.js';
+import { createPainterParamsPanel } from './PainterParamsPanel.js';
+import { createOutputPanel } from './OutputPanel.js';
+import { createTerrainPanel } from './TerrainPanel.js';
 import palettes from '../style/palettes.json';
 import { desaturatePalette } from '../style/algorithm.js';
 import { state } from '../state.js';
@@ -113,9 +116,12 @@ export const ControlsPanel = {
     createIconicViewGallery(sidebar);
     createPalettePicker(sidebar);
     createWeatherPanel(sidebar);
+    createPainterParamsPanel(sidebar);
     createPresetSelector(sidebar);
+    createTerrainPanel(sidebar);
     createDatePicker(sidebar);
     createTimeSlider(sidebar);
+    createOutputPanel(sidebar);
     createModeToggle(sidebar);
     createDebugOverlay();
 
@@ -174,11 +180,8 @@ export const ControlsPanel = {
         const sctx = snap.getContext('2d');
         sctx.drawImage(webglCanvas, 0, 0);
 
-        // TODO: once a canonical state.paperSize / state.orientation lands
-        // (Snapshot contract per STRATEGY-V2 §"The Snapshot"), read from
-        // there. For now those paths don't exist, so fall back to A3 portrait.
-        const targetPaperSize = state.get('paperSize') ?? 'A3';
-        const targetOrientation = state.get('orientation') ?? 'portrait';
+        const targetPaperSize = state.get('export.format');
+        const targetOrientation = state.get('export.orientation');
 
         const bindings = await buildBindings();
 
@@ -221,8 +224,38 @@ export const ControlsPanel = {
           }
         }
 
+        // V2 Step 5c — PainterParamsPanel surface, read at trigger time.
+        // Defaults match the engine's own DEFAULTS so an untouched panel
+        // reproduces the pre-step-5c painting.
+        const p = state.get('painter');
+        const painterParams = {
+          brushWidthMm: p.brushWidthMm,
+          density: p.density,
+          brushOpacity: p.brushOpacity,
+          brushStrokeFactor: p.brushStrokeFactor,
+          paletteTemperature: p.paletteTemperature,
+          paletteSize: p.paletteSize,
+          seed: p.seed,
+        };
+        // Wind-tilt override semantics: when finite, the user wants
+        // unconditional control — force windInfluence and let the panel
+        // win over the PR #9 weather rule. Null = auto = the rule above
+        // already wrote the data-driven value into weatherOpts.
+        if (Number.isFinite(p.windInfluenceOverride)) {
+          weatherOpts.windInfluence = p.windInfluenceOverride;
+        }
+
+        // Spread order: palette source → painter sliders → weather data.
+        // weatherOpts last lets brushOpacity (precip) and brushStrokeFactor
+        // (wind speed) override the panel sliders; that matches the brief's
+        // call-site contract from PR #9 (data-driven beats user-configured
+        // for those two, except where the user overrode them). For
+        // brushOpacity / brushStrokeFactor we accept that the slider becomes
+        // a no-op when weather data is present — by design; the panel ships
+        // the parameter surface, the data surface stays in charge.
         const { canvas: stylized, timing } = await applyPointillism(snap, {
           ...painterOpts,
+          ...painterParams,
           targetPaperSize,
           targetOrientation,
           bindings,

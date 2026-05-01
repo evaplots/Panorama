@@ -1,4 +1,4 @@
-// State schema version: 4
+// State schema version: 5
 // See DATA-CONTRACTS.md
 import { DEFAULT_PRESET } from './config.js';
 
@@ -66,6 +66,30 @@ const _state = {
     humidity_pct: null,
     precipitation_mmh: null,
     temperature_C: null,
+  },
+  // V2 Step 5c: PainterParamsPanel surface. Defaults match the Pointillism
+  // engine's existing DEFAULTS so an untouched panel reproduces the
+  // pre-step-5c painting bit-for-bit (regression guard). windInfluenceOverride
+  // is null when the user has selected "auto" — the PR #9 weather binding
+  // (speedMs > 1.5 ? 0.4 : 0) applies. A finite number forces windInfluence
+  // unconditionally at the call site.
+  painter: {
+    brushWidthMm: 0.7,
+    density: 0.06,
+    brushOpacity: 0.85,
+    brushStrokeFactor: 1.0,
+    paletteTemperature: 28,
+    paletteSize: 20,
+    windInfluenceOverride: null,
+    seed: 0xC0FFEE,
+  },
+  // V2 Step 5c: TerrainPanel surface. yExaggeration multiplies the heightmap
+  // at TerrainBuilder.build() — vertical scale of the rendered mountains and
+  // of the heights HeightSampler returns to camera/painter consumers, so the
+  // 3D viewer and the painter projection see the same exaggerated world.
+  // Default 1.0 = honest DEM (no behaviour change).
+  terrain: {
+    yExaggeration: 1.0,
   },
 };
 
