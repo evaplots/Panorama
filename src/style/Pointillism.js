@@ -113,6 +113,13 @@ const DEFAULTS = {
   // src/style/groundPainter.js and DATA-CONTRACTS.md "GroundSnapshot".
   bindings: null,
 
+  // Water painter knobs — surfaced by PainterParamsPanel as
+  // state.painter.water.*. Defaults match the panel defaults so an
+  // untouched panel matches the engine baseline.
+  waterReflectionStrength: 0.6,
+  waterSunGlitterEnabled: true,
+  waterRippleDensity: 0.4,
+
   // Gradient smoothing
   smoothGradientField: true,    // Gaussian-equivalent smoothing on dx/dy
   // smoothing radius defaults to max(w,h)/50 per the reference; can override
@@ -168,6 +175,9 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
       medianKernel: o.medianKernel,
       seed: o.seed,
       createCanvas,
+      waterReflectionStrength: o.waterReflectionStrength,
+      waterSunGlitterEnabled: o.waterSunGlitterEnabled,
+      waterRippleDensity: o.waterRippleDensity,
     },
   );
   const ctx = out.getContext('2d');
@@ -358,6 +368,10 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
     targetOrientation: o.targetOrientation,
     megapixels: +(width * height / 1e6).toFixed(2),
     groundPolygonCount: underTiming.groundPolygonCount,
+    waterPolygonCount: underTiming.waterPolygonCount,
+    waterGlitterDabCount: underTiming.waterGlitterDabCount,
+    waterRippleDabCount: underTiming.waterRippleDabCount,
+    waterMs: underTiming.waterMs,
     canopyDabCount: underTiming.canopyDabCount,
     canopyMs: underTiming.canopyMs,
     landmarkDrawnCount: underTiming.landmarkDrawnCount,

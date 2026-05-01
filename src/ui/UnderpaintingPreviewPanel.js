@@ -196,6 +196,11 @@ export function createUnderpaintingPreviewPanel(rootEl, opts = {}) {
         targetOrientation: exportSpec?.orientation ?? 'landscape',
         seed: painter?.seed ?? 0xC0FFEE,
         softenEdges,
+        // Water painter knobs — same state path PainterParamsPanel writes
+        // to, so sliding the sliders updates the preview live.
+        waterReflectionStrength: painter?.water?.reflectionStrength ?? 0.6,
+        waterSunGlitterEnabled: painter?.water?.sunGlitterEnabled ?? true,
+        waterRippleDensity: painter?.water?.rippleDensity ?? 0.4,
         // medianKernel intentionally falls through to renderUnderpainting's
         // default (11) so the preview shows the same softening intensity as
         // a full paint with applyMedianUnderpaint=true.
@@ -216,10 +221,13 @@ export function createUnderpaintingPreviewPanel(rootEl, opts = {}) {
 
     const wallMs = Math.round(performance.now() - t0);
     stat.classList.remove('is-error');
+    const waterTotal = (result.timing.waterGlitterDabCount ?? 0)
+      + (result.timing.waterRippleDabCount ?? 0);
     stat.textContent = `${wallMs} ms` +
       (result.timing.canopyDabCount
         ? ` · ${result.timing.canopyDabCount} dabs`
         : '') +
+      (waterTotal ? ` · ${waterTotal} h₂o` : '') +
       (result.timing.landmarkDrawnCount
         ? ` · ${result.timing.landmarkDrawnCount} mks`
         : '');

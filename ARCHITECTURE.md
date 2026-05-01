@@ -117,9 +117,12 @@ panel calls only the first.
    │  Stage 1 — renderUnderpainting (src/style/underpainting.js) │
    │   1. Allocate working canvas (drawImage source)             │
    │   2. paintGround       broad colour fills, sun-phase tint   │
-   │   3. paintCanopy       stippled forest dabs (PR #12)        │
-   │   4. paintLandmarks    silhouette marks (PR #12)            │
-   │   5. Optional: median-blur softening (auto-scaled kernel)   │
+   │                        (skips natural=water — see step 3)   │
+   │   3. paintWater        deep base + sky-sampling band +      │
+   │                        sun-glitter + ripple texture (v3.11) │
+   │   4. paintCanopy       stippled forest dabs (PR #12)        │
+   │   5. paintLandmarks    silhouette marks (PR #12)            │
+   │   6. Optional: median-blur softening (auto-scaled kernel)   │
    │  Returns { canvas, srcData, timing }                        │
    └─────────────────────────────────────────────────────────────┘
                              │

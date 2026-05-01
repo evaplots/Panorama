@@ -1,5 +1,175 @@
 # Panorama — release notes
 
+## V2 — Painterly water reflections (released 2026-05-01)
+
+A four-pass painter for `natural=water` polygons. Water reads as water now,
+not as flat blue paint — deep-water base, a sky-sampling band along each
+polygon's far edge with cosine falloff, a back-lit sun-glitter streak
+that fires only when the sun's geometry says it should, and stippled
+horizontal ripple texture. Sun-phase aware tints so the same lake at
+golden hour goes warm-orange and at twilight goes mauve.
+
+Phase 5 polish item per ROADMAP.md ("Reflective water for natural=water
+polygons (sunset on a lake is dramatic)"). Lives entirely inside the
+existing painter pipeline — no 3D scene changes — and plugs in between
+`paintGround` and `paintCanopy` in `src/style/underpainting.js`.
+
+### Highlights
+
+- **`src/style/waterPainter.js` (new)** — owns `natural=water` polygons
+  end-to-end. Five passes per polygon:
+  1. Deep-water fill: polygon's tag colour darkened 35 % (water is darker
+     than sky from above, deeper than its surface tone).
+  2. Sky-sampling band: a vertical gradient along the polygon's far edge,
+     sampling the actual sky pixels just above that edge, with cosine
+     falloff over `SKY_BAND_FRACTION × polygon-height`. Strength governed
+     by `painter.water.reflectionStrength` (0–1, default 0.6). Source-
+     canvas sampling means the band tint tracks the rendered sky's actual
+     gradient — not just the sun phase enum.
+  3. Sun-glitter streak: stippled warm dabs from the contact point (where
+     the sun's azimuth meets the polygon's far edge) running toward the
+     camera. Only fires when the sun's screen position projects above the
+     polygon's far edge AND the sun is in front of the camera (back-lit
+     water) AND the sun is above horizon. Front-lit water (sun behind
+     camera) shows no glitter — the brief's design constraint over the
+     "some real lakes do, very faint" hint. Per-dab intensity scales with
+     sun altitude: golden hour / sunset = 1.0×, soft afternoon = 0.7×,
+     high noon = 0.5×, below horizon = 0×.
+  4. Ripple texture: thin elongated horizontal dabs (water is flat in
+     screen-space) with mm-physical length so prints at any DPI carry the
+     same texture. Density governed by `painter.water.rippleDensity`
+     (0–1, default 0.4).
+  5. Sun-phase tint envelope: same warm/cool/desat pattern groundPainter
+     uses, slightly stronger alphas because water is more reflective.
+- **`groundPainter` updated** to skip `category==='water'` polygons;
+  waterPainter owns them, no double-paint.
+- **State schema bumped to v6** with `painter.water` block:
+  `{ reflectionStrength: 0.6, sunGlitterEnabled: true, rippleDensity: 0.4 }`.
+  Defaults reproduce the engine baseline on water-free scenes — the
+  parity-probe SHA-256 hash is unchanged at `cf15cf7b…80b39f`.
+- **PainterParamsPanel** gains a "Water" subgroup with two sliders
+  (Reflection, Ripple density) and one toggle (Sun glitter). Writes to
+  `state.painter.water.*` on `input` events; UnderpaintingPreviewPanel
+  picks them up live like every other slider.
+- **ControlsPanel** plumbs the three water knobs through to
+  `applyPointillism` opts at the stylize-trigger site.
+- **Determinism preserved.** waterPainter forks its own Mulberry32 from
+  `opts.seed ^ 0x77_77_77_77` (seven for "wet"; matches the
+  canopy/landmark XOR-salt convention). Same Snapshot in →
+  byte-identical water region out, verified by
+  `scripts/water-determinism-probe.js` (identical SHA-256 across two
+  paints).
+
+### Risk-first probes — three pass
+
+`scripts/water-perf-probe.js` runs all three and exits non-zero on any
+failure.
+
+#### 1. Perf at coastal extents (A3 @ 300 DPI)
+
+Mediterranean cliff observer (80 m above sea), 8 km × 4 km lake polygon
+projected to ~10 MP of water on the canvas. v1.4 expressionist preset.
+
+| Metric                     | Value      | Bar           | Verdict |
+| -------------------------- | ---------- | ------------- | ------- |
+| Water painter (direct cost) | 62 ms     | < 100 ms      | ★ PASS  |
+| Glitter dabs               | 117        | —             | —       |
+| Ripple dabs                | 312        | —             | —       |
+| Underpainting total        | 145 ms     | —             | —       |
+| **TOTAL A3 render**        | **27.4 s** | < 28 s        | PASS    |
+
+Gradient + strokes pass takes ~27 s — same range the canopy-landmark
+probe sees on identical hardware (forest scene without water: 27.08 s).
+The water painter's net cost stays under 1 s end-to-end.
+
+A note on tuning: the ripple-dab `RIPPLE_DENSITY_BASE` constant walked
+from 0.45 → 0.30 → 0.20 → 0.10 over the development cycle. The
+straightforward 0.45 default put waterPainter at 113 ms (over the
+escalation threshold) and pushed the gradient + strokes pass past 28 s
+on warm-process runs because each ripple dab raises Scharr gradient
+magnitude → longer strokes → more time. Settling at 0.10 (with the
+slider's default 0.4 multiplier → ~400 dabs at coastal extents) keeps
+the total under budget. Curators who want denser ripples can push the
+slider above 0.4 (it goes to 1.0).
+
+#### 2. Sun-direction matrix (4 azimuths × 3 elevations = 12 outputs)
+
+Same lake rendered at sun azimuths {ahead, behind, left, right} crossed
+with elevations {30°, 5°, -5°}. Saved as PNGs in
+`.iterations/2026-05-01-water-reflections/sun-az<DEG>-alt<DEG>.png`.
+
+| Sun                     | Glitter expected         | Glitter observed  |
+| ----------------------- | ------------------------ | ----------------- |
+| ahead, alt +30° (noon)  | back-lit, dimmed         | YES (101 dabs)    |
+| ahead, alt +5° (golden) | back-lit, strongest      | YES (204 dabs)    |
+| ahead, alt -5° (twilight) | sun below horizon → none | no              |
+| behind, any altitude    | front-lit → none         | no                |
+| left/right, any         | side, glitter unconstrained | no             |
+
+All cases match expected geometry. Front-lit water never lights up;
+back-lit water near horizon shows the densest glitter; below-horizon
+sun produces no glitter regardless of azimuth.
+
+#### 3. Tint correctness (noon vs sunset, sampled inside the sky band)
+
+Same lake, same observer, two phases. Sampled the canvas just inside
+the band (where source-canvas sky pixels and sun-phase-tint envelope
+both contribute):
+
+| Phase   | Avg band RGB | Warmth (R−B)  |
+| ------- | ------------ | ------------- |
+| Noon    | 90, 118, 148 | **−58 (cool)** |
+| Sunset  | 145, 92, 95  | **+50 (warm)** |
+| **Δ**   |              | **+108**       |
+
+The band tint changes by 108 R−B units between noon and sunset — the
+SUN_PHASE_TINT envelope reaches waterPainter and the source-canvas
+sampling reflects sky-gradient changes. If both had been identical,
+the envelope wasn't wired through; the +108 delta confirms the data
+path.
+
+### What's intentionally deferred (per the brief's "v2" callouts)
+
+- **Reflections of land objects** ("a tower next to a lake doesn't
+  reflect into it in v1"). The water-as-mirror-surface treatment is
+  brief-flagged for v2; this PR puts water before landmarks in the
+  pipeline so the order is right when that lands.
+- **Animated ripples.** This is a still painting; the ripple texture
+  is texture, not motion.
+- **Per-water-type colour overrides.** Wetlands, rivers, and lakes all
+  share the `category==='water'` mapping today; the painter uses the
+  per-tag `GROUND_COVER_COLOURS` lookup so each polygon's base tone is
+  faithful to its specific tag. If curation surfaces a need for
+  category-specific behaviours (e.g. wetland gets less specular
+  reflection because wet meadow ≠ open lake), it lands as a per-category
+  branch in waterPainter.
+- **Hi-fi browser visual QA.** This PR ships with node-side probes and
+  PNG outputs in `.iterations/2026-05-01-water-reflections/`. Browser
+  `npm run dev` flow remains the canonical visual-QA gate.
+
+### Files changed
+
+```
+src/style/waterPainter.js                 new — water reflection painter
+src/style/groundPainter.js                +category==='water' skip
+src/style/underpainting.js                wire waterPainter; +water timing fields
+src/style/Pointillism.js                  pass-through water opts; +water timing
+src/state.js                              +painter.water block, schema → v6
+src/ui/PainterParamsPanel.js              +Water subgroup (2 sliders, 1 toggle)
+src/ui/UnderpaintingPreviewPanel.js       +water opts in renderUnderpainting
+                                          call; +water dab count in stat bar
+src/ui/ControlsPanel.js                   +water opts in painterParams
+scripts/water-perf-probe.js               new — 3 risk-first probes
+scripts/water-determinism-probe.js        new — byte-parity check
+DATA-CONTRACTS.md                         v3.11 entry; state-schema doc bump
+ARCHITECTURE.md                           painter pipeline diagram updated
+ROADMAP.md                                Phase 5 reflective-water marked done;
+                                          Phase 2.5 non-goal reworded;
+                                          two new Decision Log entries
+```
+
+---
+
 ## V2 — Live underpainting preview (released 2026-05-01)
 
 Curation infrastructure, not a painter feature. Splits the painter into

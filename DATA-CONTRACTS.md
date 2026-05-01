@@ -157,7 +157,7 @@ const state = {
     temperature_C: null,
   },
 
-  // -------- Painter parameter surface (V2 Step 5c) --------
+  // -------- Painter parameter surface (V2 Step 5c, water added v3.11) --------
   // PainterParamsPanel writes here on slider input. ControlsPanel's stylize
   // handler reads at trigger time and spreads into applyPointillism opts.
   // Defaults match the engine's DEFAULTS so an untouched panel reproduces
@@ -171,6 +171,11 @@ const state = {
     paletteSize: 20,           // 8–50, k for median-cut extraction
     windInfluenceOverride: null, // null = auto (PR #9 wind rule); finite = force
     seed: 0xC0FFEE,            // mulberry32 seed; "🎲 New seed" rerolls
+    water: {                   // v3.11 — painterly water reflections
+      reflectionStrength: 0.6, // 0–1, sky-band override strength (cosine falloff)
+      sunGlitterEnabled: true, // back-lit sun glitter on/off
+      rippleDensity: 0.4,      // 0–1, horizontal surface stroke density
+    },
   },
 
   // -------- Terrain options (V2 Step 5c) --------
@@ -676,9 +681,10 @@ The state-schema version is independent of the contract-doc version. Version 3
 of the runtime state schema was stable from Phase 2 through V2 Step 4 — the
 v3.1–v3.6 entries below all add or revise *shared types* (StyleBindings,
 SnapshotShapes, etc.) without touching the live `state` object. Version 4
-(V2 Step 5) added the `weatherOverrides` field. Version 5 (V2 Step 5c) adds
-the `painter` and `terrain` blocks. Bump the state comment only when a field
-is added/removed/renamed in `src/state.js`.
+(V2 Step 5) added the `weatherOverrides` field. Version 5 (V2 Step 5c) added
+the `painter` and `terrain` blocks. Version 6 (v3.11) adds the
+`painter.water.*` block for painterly water reflections. Bump the state
+comment only when a field is added/removed/renamed in `src/state.js`.
 
 When a future contributor sees their local checkout's state version doesn't match the doc, they know to read the changelog at the bottom of this file before debugging.
 
@@ -686,6 +692,77 @@ When a future contributor sees their local checkout's state version doesn't matc
 
 ## Changelog
 
+- **v3.11** — Painterly water reflections (Phase 5 polish item per
+  ROADMAP.md). New module file: `src/style/waterPainter.js`. Owns
+  `natural=water` polygons end-to-end via four layered passes per polygon:
+  (1) deep-water base fill (the polygon's tag colour darkened 35 %), (2)
+  sky-sampling band along the polygon's far edge with cosine falloff
+  governed by `painter.water.reflectionStrength`, (3) sun-glitter streak
+  when the sun's projection falls above the far edge AND the sun is in
+  front of the camera (back-lit) AND above the horizon — front-lit water
+  shows no glitter (design constraint), (4) horizontal ripple dabs along
+  the water's surface direction, density governed by
+  `painter.water.rippleDensity`. (5) Sun-phase tint envelope reused from
+  groundPainter so water shifts warm at golden hour / sunset and cool /
+  desaturated at twilight / night. Plug point: between `paintGround` and
+  `paintCanopy` in `src/style/underpainting.js` — water before forest
+  because a forest can't grow on a lake; water before landmarks because
+  a tower on a lake reflects into the water in a hypothetical v2.
+  **`groundPainter` updated** to skip `category==='water'` polygons
+  entirely; waterPainter owns them, no double-paint. **State schema
+  bumped to v6** with the new `painter.water` block:
+  `{ reflectionStrength: 0.6, sunGlitterEnabled: true, rippleDensity: 0.4 }`.
+  Defaults match the engine baseline so an untouched panel reproduces
+  the pre-PR painting on water-free scenes (verified: parity-probe SHA-256
+  hash unchanged at `cf15cf7b…80b39f`). **PainterParamsPanel** gains a
+  "Water" subgroup with two sliders (Reflection, Ripple density) and one
+  toggle (Sun glitter); writes to `state.painter.water.*` on `input`.
+  **UnderpaintingPreviewPanel** picks up the new sliders live — water
+  reflections re-render on `painter:changed` like every other slider.
+  **ControlsPanel** plumbs the three water knobs through to
+  `applyPointillism` opts. **Determinism preserved:** waterPainter forks
+  its own Mulberry32 from `opts.seed ^ 0x77_77_77_77` (seven for "wet"),
+  matching the canopy/landmark XOR-salt convention; same Snapshot in →
+  byte-identical water region out (verified by
+  `scripts/water-determinism-probe.js`, identical SHA-256 across two
+  paints). **Sky-band tint**: localised per-polygon
+  `ctx.getImageData(stripX, stripY, stripW, stripH)` reads (sampleH ≤ 40 px
+  × bbox-width strip) — full-canvas getImageData on A3 is ~30 ms; the
+  strip read is ~1 ms. Falls back to per-phase `SKY_BAND_FALLBACK` when
+  sampling fails. **Glitter geometry**: the sun is treated as a point at
+  infinity; its screen position is computed from
+  `(sin(az)cos(alt), sin(alt), -cos(az)cos(alt))` projected through the
+  same camera basis `projection.js` uses. Glitter fires only when the
+  resulting `viewDot > 0` (sun in front of camera = back-lit water),
+  the sun's altitude > -2° (above horizon-band cutoff), and the sun's
+  screen-x is within `GLITTER_AZIMUTH_TOLERANCE` polygon-widths of the
+  polygon's centre. Per-dab intensity scales with sun altitude (golden
+  hour / sunset = 1.0×, soft afternoon = 0.7×, high noon = 0.5×, below
+  horizon = 0×) so the brief's "back-lit, near horizon, strongest"
+  rule holds. **Three probes pass** (`scripts/water-perf-probe.js`):
+  perf at coastal-extent A3 (water painter 62 ms < 100 ms ceiling, total
+  27.4 s < 28 s budget); sun-direction matrix (4 azimuths × 3 elevations,
+  glitter present only when geometry says it should be); tint
+  correctness (noon band warmth -58, sunset band warmth +50, delta +108
+  → SUN_PHASE_TINT envelope reaches waterPainter, source-canvas
+  sampling reflects sky gradient changes). Three risk-first ripple-dab
+  density tunings (0.45 → 0.30 → 0.20 → 0.10) walked the constant down
+  until the indirect cost on the gradient + strokes pass landed
+  comfortably under the 28 s bar; curators wanting more visible ripples
+  can push the slider above 0.4 (it goes to 1.0). **No new dependencies.**
+  **Verified against code on 2026-05-01:** `src/style/waterPainter.js`
+  (new), `src/style/groundPainter.js` (`category==='water'` skip),
+  `src/style/underpainting.js` (water plug-in slot + opts pass-through +
+  timing fields), `src/style/Pointillism.js` (water opts pass-through +
+  timing fields), `src/state.js` (v6 schema, `painter.water` block,
+  comment bumped), `src/ui/PainterParamsPanel.js` (Water subgroup,
+  reflectionStrength + rippleDensity sliders, sunGlitterEnabled toggle),
+  `src/ui/UnderpaintingPreviewPanel.js` (water opts wired through), and
+  `src/ui/ControlsPanel.js` (water opts in painterParams) all match this
+  entry; `npm run build` clean (70 modules, 2.77 s);
+  `scripts/parity-probe.js` SHA-256 hash unchanged; new
+  `scripts/water-perf-probe.js` and `scripts/water-determinism-probe.js`
+  ship alongside the painter.
 - **v3.10** — Painterly vegetation + landmarks. Reincarnates the artistic
   intent of the original ROADMAP Phase 3 (forests should read as forests,
   landmarks visible) inside the painter pipeline; no 3D geometry restored.

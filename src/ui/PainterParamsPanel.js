@@ -19,6 +19,14 @@ const SLIDER_FIELDS = [
   { label: 'Palette colours',   path: 'painter.paletteSize',        min: 8,   max: 50,   step: 1,     unit: '',    decimals: 0 },
 ];
 
+// Water-painter sliders. Rendered in their own subgroup at the bottom of the
+// panel so the user can find the painterly-water knobs together — sky-band
+// strength, glitter on/off, ripple density.
+const WATER_SLIDER_FIELDS = [
+  { label: 'Reflection',        path: 'painter.water.reflectionStrength', min: 0, max: 1, step: 0.01,  unit: '',    decimals: 2 },
+  { label: 'Ripple density',    path: 'painter.water.rippleDensity',      min: 0, max: 1, step: 0.01,  unit: '',    decimals: 2 },
+];
+
 function fmt(value, decimals) {
   if (!Number.isFinite(value)) return '—';
   return decimals === 0 ? String(Math.round(value)) : value.toFixed(decimals);
@@ -113,6 +121,33 @@ function makeWindTiltRow(parent) {
   parent.appendChild(row);
 }
 
+function makeWaterGlitterRow(parent) {
+  const row = document.createElement('label');
+  row.className = 'pano-painter-row pano-painter-row-toggle';
+
+  const label = document.createElement('span');
+  label.className = 'pano-painter-label';
+  label.textContent = 'Sun glitter';
+  row.appendChild(label);
+
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = !!state.get('painter.water.sunGlitterEnabled');
+  row.appendChild(input);
+
+  const readout = document.createElement('span');
+  readout.className = 'pano-painter-readout';
+  readout.textContent = input.checked ? 'on' : 'off';
+  row.appendChild(readout);
+
+  input.addEventListener('input', () => {
+    state.set('painter.water.sunGlitterEnabled', input.checked);
+    readout.textContent = input.checked ? 'on' : 'off';
+  });
+
+  parent.appendChild(row);
+}
+
 function makeSeedRow(parent) {
   const row = document.createElement('div');
   row.className = 'pano-painter-seed-row';
@@ -157,6 +192,16 @@ export function createPainterParamsPanel(parentEl) {
 
   for (const field of SLIDER_FIELDS) makeSlider(list, field);
   makeWindTiltRow(list);
+
+  // Water subgroup: explicit subhead so the painterly-water knobs read as
+  // their own group, not as more strokes-of-paint sliders.
+  const waterHead = document.createElement('div');
+  waterHead.className = 'pano-painter-subhead';
+  waterHead.textContent = 'Water';
+  list.appendChild(waterHead);
+  for (const field of WATER_SLIDER_FIELDS) makeSlider(list, field);
+  makeWaterGlitterRow(list);
+
   makeSeedRow(section);
 
   return {
