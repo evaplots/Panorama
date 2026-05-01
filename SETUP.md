@@ -81,10 +81,7 @@ panorama/
     │   └── SunCalculator.js
     ├── osm/
     │   ├── OSMFetcher.js
-    │   ├── GroundCoverBuilder.js
-    │   ├── BuildingsBuilder.js
-    │   ├── VegetationBuilder.js
-    │   └── LODManager.js
+    │   └── index.js                  # cache-warming wrapper; 3D builders removed
     ├── camera/
     │   ├── CameraController.js
     │   └── ScenicDefault.js

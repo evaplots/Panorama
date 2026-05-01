@@ -295,7 +295,8 @@ export const OSMFetcher = {
 
   /**
    * Convenience: fetch + filter for ground-cover-relevant tags + convert.
-   * Builders call this; under the hood it shares cached tiles with `fetchBuildings`.
+   * Called by `OSMFeatureBuilder.build()` to warm the cache for the painter.
+   * Shares cached tiles with `fetchBuildings` (same combined query underneath).
    */
   async fetchGroundCover(location, preset) {
     const elements = await fetchTilesForArea(location, preset);

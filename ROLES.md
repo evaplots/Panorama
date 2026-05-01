@@ -117,26 +117,39 @@ Each role has six fields:
 
 ## 🏘 OSM Features Engineer
 
-**Mandate:** Turns OpenStreetMap data into visual content: ground cover (Phase 1.5), buildings (Phase 2), trees and vegetation (Phase 3), landmarks.
+**Mandate:** Owns Overpass fetching and the cache that backs both the 3D
+scene's cache-warming pass and the painter's polygon rendering. As of the
+chore that removed 3D OSM rendering, this role no longer constructs Three.js
+geometry — the painter (Style role) does the polygon work directly via
+`OSMFetcher.peekGroundCover`.
 
 **Owned files:**
 - `src/osm/OSMFetcher.js`
-- `src/osm/GroundCoverBuilder.js`     ← Phase 1.5
-- `src/osm/BuildingsBuilder.js`        ← Phase 2
-- `src/osm/VegetationBuilder.js`       ← Phase 3
-- `src/osm/LODManager.js`
+- `src/osm/index.js` — `OSMFeatureBuilder.build()` is now a cache-warming
+  wrapper around `fetchGroundCover` that returns an empty `osmFeatures` Group.
 
 **Public API:**
-- `OSMFeatureBuilder.build(location, lodConfig) → Promise<THREE.Group>`
-- The group contains sub-groups: `groundCover`, `buildings`, `vegetation`, `landmarks`. Sub-groups not yet built in the current phase are present but empty.
+- `OSMFetcher.fetchGroundCover(location, preset) → Promise<polygons>`
+  Fetches (and caches) ground-cover polygons. Used by the scene-rebuild path
+  to warm the cache for the painter.
+- `OSMFetcher.peekGroundCover(location, preset) → Promise<polygons>`
+  Cache-only read. Never triggers a network request. Used by the painter at
+  trigger time so paint is fast even when the scene fetch is still in flight.
+- `OSMFeatureBuilder.build(location, preset) → Promise<THREE.Group>`
+  Calls `fetchGroundCover` to warm the cache and returns an empty Group named
+  `osmFeatures`. Kept so `SceneManager`'s add/dispose flow stays unchanged.
 
-**Depends on:** Data Layer (Overpass), Terrain (height sampling for placement and ground-cover Z-offset).
+**Depends on:** Data Layer (Overpass + Cache).
 
-**Must not touch:** Terrain mesh itself, sky, camera. Reads heights but never writes them.
+**Must not touch:** Terrain, sky, camera, painter.
 
-**Decision authority:** OSM tag mapping (which tags become which visual content), ground cover colour palette, building height heuristics, tree density per forest type, LOD distance thresholds, Overpass query construction.
+**Decision authority:** OSM tag selection, Overpass query construction,
+cache TTLs, peek vs fetch semantics.
 
 **See:** [docs/modules/osm-features.md](./docs/modules/osm-features.md)
+(Note: that doc still describes the deleted 3D builders. It will be
+rewritten when the role is next active; until then, it is preserved as
+historical reference for restoration.)
 
 ---
 

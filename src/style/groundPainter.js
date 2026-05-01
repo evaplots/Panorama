@@ -91,9 +91,8 @@ function ringBBox(ring) {
   return { minY, maxY };
 }
 
-// Sort polygons by farthest depth first (largest in metres = furthest projects to
-// smaller screen extent in many cases, but here we use median screen-space size as
-// the heuristic, matching GroundCoverBuilder's "biggest first" approach).
+// Sort by screen-area, biggest first — small-area polygons render last so
+// fine details survive on top of broad fills.
 function ringScreenArea(ring) {
   let area = 0;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
