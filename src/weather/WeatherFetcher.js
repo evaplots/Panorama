@@ -1,0 +1,138 @@
+// V2 Step 5 — Open-Meteo client. Mirrors src/osm/OSMFetcher.js's peek/fetch
+// split: warm path (fetchWeather) writes the cache; paint-time path
+// (peekWeather) reads cache only and never issues a network request.
+//
+// The cached value is the *mapped* WeatherSnapshot, not the raw API
+// response — saves re-parsing the hourly arrays on every peek.
+
+import { Cache } from '../data/Cache.js';
+import { APIS } from '../config.js';
+
+const WEATHER_TTL_MS = 3_600_000; // 1 h — same as the bucket size
+
+const HOURLY_VARS = [
+  'wind_direction_10m',
+  'wind_speed_10m',
+  'wind_gusts_10m',
+  'cloud_cover',
+  'relative_humidity_2m',
+  'surface_pressure',
+  'temperature_2m',
+  'precipitation',
+  'weather_code',
+].join(',');
+
+/** Floor a timestamp to the start of its UTC hour. */
+function floorToHourUTC(timestamp) {
+  const d = new Date(timestamp);
+  d.setUTCMinutes(0, 0, 0);
+  return d;
+}
+
+/** ISO-ish hour bucket label, e.g. "2026-05-01T14:00Z". Used in cache keys. */
+function hourBucketISO(timestamp) {
+  const d = floorToHourUTC(timestamp);
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}T${hh}:00Z`;
+}
+
+/** Open-Meteo's start_hour/end_hour parameter format: "yyyy-mm-ddThh:mm" (UTC). */
+function openMeteoHourParam(timestamp) {
+  const d = floorToHourUTC(timestamp);
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}T${hh}:00`;
+}
+
+function cacheKey(location, timestamp) {
+  return `weather:${location.lat.toFixed(3)},${location.lon.toFixed(3)},${hourBucketISO(timestamp)}`;
+}
+
+function buildUrl(location, timestamp) {
+  const hour = openMeteoHourParam(timestamp);
+  const params = new URLSearchParams({
+    latitude: String(location.lat),
+    longitude: String(location.lon),
+    hourly: HOURLY_VARS,
+    wind_speed_unit: 'ms',
+    timezone: 'UTC',
+    start_hour: hour,
+    end_hour: hour,
+  });
+  return `${APIS.openMeteo}?${params.toString()}`;
+}
+
+/** Map the Open-Meteo hourly slice into the WeatherSnapshot shape. */
+function toSnapshot(json, bucketDate) {
+  const h = json?.hourly;
+  if (!h || !Array.isArray(h.time) || h.time.length === 0) {
+    throw new Error('Open-Meteo response missing hourly data');
+  }
+  return {
+    wind: {
+      directionDeg: h.wind_direction_10m?.[0] ?? null,
+      speedMs:      h.wind_speed_10m?.[0]     ?? null,
+      gustMs:       h.wind_gusts_10m?.[0]     ?? null,
+    },
+    cloudCover_pct:   h.cloud_cover?.[0]          ?? null,
+    humidity_pct:     h.relative_humidity_2m?.[0] ?? null,
+    pressure_hPa:     h.surface_pressure?.[0]     ?? null,
+    temperature_C:    h.temperature_2m?.[0]       ?? null,
+    precipitation_mmh: h.precipitation?.[0]       ?? null,
+    weatherCode:      h.weather_code?.[0]         ?? null,
+    timestamp: bucketDate,
+  };
+}
+
+/**
+ * Fetch the weather snapshot for `location` at the hour-bucket containing
+ * `timestamp`. Cache hit short-circuits the network. Used only by the warm
+ * path (SceneManager). Routed through `Cache.dedupe` so two warm triggers
+ * inside one bucket coalesce into a single fetch.
+ *
+ * @param {{lat:number, lon:number}} location
+ * @param {Date|number|string} timestamp
+ * @returns {Promise<import('../style/Pointillism.js').WeatherSnapshot>}
+ */
+async function fetchWeather(location, timestamp) {
+  const key = cacheKey(location, timestamp);
+  return Cache.dedupe(key, async () => {
+    const cached = await Cache.get(key);
+    if (cached) return cached;
+
+    const res = await fetch(buildUrl(location, timestamp));
+    if (!res.ok) throw new Error(`Open-Meteo HTTP ${res.status}`);
+    const json = await res.json();
+
+    const snapshot = toSnapshot(json, floorToHourUTC(timestamp));
+    await Cache.set(key, snapshot, WEATHER_TTL_MS);
+    return snapshot;
+  });
+}
+
+/**
+ * Cache-only read — never issues a network request, never blocks on an
+ * in-flight warm fetch. Returns `null` on miss. Mirrors
+ * `OSMFetcher.peekGroundCover`'s discipline: paint-time must not await
+ * Open-Meteo, and the next paint after the warm lands picks up the data
+ * automatically.
+ *
+ * @param {{lat:number, lon:number}} location
+ * @param {Date|number|string} timestamp
+ */
+async function peekWeather(location, timestamp) {
+  return (await Cache.get(cacheKey(location, timestamp))) ?? null;
+}
+
+export const WeatherFetcher = {
+  fetchWeather,
+  peekWeather,
+  // Exposed for the SceneManager hour-bucket guard so the bucket logic stays
+  // in one place rather than being re-implemented on the warm side.
+  hourBucketISO,
+};

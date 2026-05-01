@@ -103,14 +103,14 @@ export const DEFAULT_EXPORT_DPI = 300;
 
 // External API endpoints. Per CLAUDE.md rule 9, every URL here must be
 // verified live (not trusted from memory) before commit, and re-verified
-// when a phase ships. Last full audit: 2026-04-29.
+// when a phase ships. Last full audit: 2026-05-01.
 //
 //   Nominatim          — verified alive (status endpoint returns "OK")
 //   Overpass-api.de    — verified alive (2 slots reported, current timestamp)
 //   AWS Terrain Tiles  — verified alive (sample tile 0/0/0.png returns ~104 KB PNG)
+//   Open-Meteo         — verified alive 2026-05-01 (forecast endpoint, browser CORS OK, no key)
 //
 // Future endpoints (not yet in code; documented in stub module docs):
-//   Open-Meteo         — verified alive (forecast endpoint returns valid JSON)
 //   eBird API v2       — verify before adding to wildlife module
 //   xeno-canto API     — verify before adding to wildlife module
 //   NOAA SWPC          — verify before adding to astronomy module
@@ -124,6 +124,7 @@ export const APIS = {
     'https://overpass-api.de/api/interpreter',
   ],
   awsTerrain: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium',
+  openMeteo: 'https://api.open-meteo.com/v1/forecast',
   userAgent: 'Panorama/1.0 (eva.bonaccorsi@gmail.com)',
 };
 

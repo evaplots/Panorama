@@ -11,6 +11,7 @@ import { state } from '../state.js';
 import { CameraController } from '../camera/CameraController.js';
 import { HeightSampler } from '../terrain/HeightSampler.js';
 import { OSMFetcher } from '../osm/OSMFetcher.js';
+import { WeatherFetcher } from '../weather/WeatherFetcher.js';
 import { categorise } from '../style/categories.js';
 import { PRESETS, DEFAULT_PRESET, EYE_HEIGHT_M } from '../config.js';
 
@@ -62,9 +63,22 @@ async function buildBindings() {
     console.warn('[ControlsPanel] OSM cache peek failed at paint time, painting without polygons:', err.message);
   }
 
+  const timestamp = state.get('time.timestamp');
+
+  // Weather peek is cache-only (mirrors OSM peek). Cold cache → undefined,
+  // and the painter falls back to gradient-only stroke direction. `undefined`
+  // (not `null`) keeps the optional `weather` field in StyleBindings cleanly
+  // absent under destructuring.
+  let weather;
+  try {
+    weather = (await WeatherFetcher.peekWeather(location, timestamp)) ?? undefined;
+  } catch (err) {
+    console.warn('[ControlsPanel] Weather cache peek failed at paint time, painting without wind binding:', err.message);
+  }
+
   return {
     sun: state.get('sun'),
-    timestamp: state.get('time.timestamp'),
+    timestamp,
     location,
     viewpoint: {
       location,
@@ -76,6 +90,7 @@ async function buildBindings() {
       groundY,
     },
     ground: { osmFeatures },
+    weather,
   };
 }
 
@@ -158,11 +173,24 @@ export const ControlsPanel = {
 
         const bindings = await buildBindings();
 
+        // Bridge wind → painter opts (DATA-CONTRACTS v0 bindings). Only when
+        // the weather snapshot is present and has a wind block; otherwise
+        // pass none of the three opts so the painter falls back to its
+        // gradient-only stroke direction and default brushStrokeFactor.
+        const windOpts = {};
+        const wind = bindings?.weather?.wind;
+        if (wind && Number.isFinite(wind.directionDeg) && Number.isFinite(wind.speedMs)) {
+          windOpts.windDirectionDeg = wind.directionDeg + 90;
+          windOpts.windInfluence = wind.speedMs > 1.5 ? 0.4 : 0;
+          windOpts.brushStrokeFactor = 1.0 * (1 + wind.speedMs / 10);
+        }
+
         const { canvas: stylized, timing } = await applyPointillism(snap, {
           ...resolvePainterOpts(),
           targetPaperSize,
           targetOrientation,
           bindings,
+          ...windOpts,
         });
         console.log('[Pointillism] timing:', timing);
 
