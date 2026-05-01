@@ -5,7 +5,18 @@ import { createPresetSelector } from './PresetSelector.js';
 import { createTimeSlider } from './TimeSlider.js';
 import { createModeToggle } from './ModeToggle.js';
 import { createDebugOverlay } from './DebugOverlay.js';
+import { createPalettePicker } from './PalettePicker.js';
+import palettes from '../style/palettes.json';
 import { state } from '../state.js';
+
+function resolvePainterOpts() {
+  const painter = state.get('style.painter');
+  const source = state.get('style.paletteSource');
+  if (source === 'curated' && painter && palettes[painter]) {
+    return { palette: palettes[painter].colors };
+  }
+  return {}; // colorthief / 'auto' — let applyPointillism extract from source
+}
 
 export const ControlsPanel = {
   init(rootEl) {
@@ -17,6 +28,7 @@ export const ControlsPanel = {
     createMapPicker(sidebar);
     createLocationPicker(sidebar);
     createIconicViewGallery(sidebar);
+    createPalettePicker(sidebar);
     createPresetSelector(sidebar);
     createTimeSlider(sidebar);
     createModeToggle(sidebar);
@@ -83,6 +95,7 @@ export const ControlsPanel = {
         const targetOrientation = state.get('orientation') ?? 'portrait';
 
         const { canvas: stylized, timing } = await applyPointillism(snap, {
+          ...resolvePainterOpts(),
           targetPaperSize,
           targetOrientation,
         });

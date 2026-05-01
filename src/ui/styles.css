@@ -295,6 +295,59 @@ input[type="text"]:focus, input[type="number"]:focus {
 }
 .pano-custom-km input { width: 60px; }
 
+/* ── Palette picker ── */
+.pano-palette-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pano-palette-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 4px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background .15s;
+}
+.pano-palette-row:hover { background: rgba(255,255,255,.04); }
+.pano-palette-row input[type="radio"] {
+  accent-color: var(--accent);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.pano-palette-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+.pano-palette-name {
+  font-size: 12px;
+  color: var(--fg);
+  line-height: 1.25;
+}
+.pano-palette-sub {
+  font-size: 10px;
+  color: rgba(255,255,255,.45);
+}
+
+.pano-palette-swatches {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  width: fit-content;
+}
+.pano-palette-swatch {
+  display: block;
+  width: 14px;
+  height: 12px;
+}
+
 /* ── Time slider ── */
 .pano-time-readout {
   font-size: 12px;

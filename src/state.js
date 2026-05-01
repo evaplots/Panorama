@@ -48,6 +48,13 @@ const _state = {
     dpi: 300,
     inProgress: false,
   },
+  style: {
+    // 'auto' is the ColorThief sentinel matching the Snapshot contract in
+    // STRATEGY-V2 §"The Snapshot". When painter === 'auto' the palette is
+    // extracted from the underpainting; otherwise it is a palettes.json slug.
+    painter: 'auto',
+    paletteSource: 'colorthief', // 'curated' | 'colorthief'
+  },
 };
 
 function getPath(obj, path) {
