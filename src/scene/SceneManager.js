@@ -253,6 +253,12 @@ export const SceneManager = {
     state.on('preset:changed', () => {
       if (state.get('location')) rebuild();
     });
+    // V2 Step 5c — verticality changes shape the heightmap at TerrainBuilder
+    // time. DEM tiles are cached so the rebuild is seconds, not minutes; the
+    // slider commits on `change` (release) so we don't rebuild mid-drag.
+    state.on('terrainOption:changed', () => {
+      if (state.get('location')) rebuild();
+    });
     state.on('time:changed', () => {
       warmWeather();
       refreshCurrentWeather();

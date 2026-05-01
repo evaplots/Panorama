@@ -393,6 +393,114 @@ input[type="text"]:focus, input[type="number"]:focus {
   color: var(--fg);
 }
 
+/* ── Painter params panel ── */
+.pano-painter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pano-painter-row {
+  display: grid;
+  grid-template-columns: 92px 1fr 56px;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: rgba(255,255,255,.65);
+}
+.pano-painter-row-wind {
+  grid-template-columns: 92px 1fr 44px 22px;
+}
+.pano-painter-row input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.pano-painter-readout {
+  text-align: right;
+  color: var(--accent2);
+  font-variant-numeric: tabular-nums;
+}
+.pano-painter-readout.is-auto {
+  color: rgba(255,255,255,.45);
+  font-style: italic;
+}
+.pano-painter-reset {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: rgba(255,255,255,.7);
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
+.pano-painter-reset:hover { background: rgba(255,255,255,.06); color: var(--fg); }
+.pano-painter-seed-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.pano-painter-seed-btn {
+  background: transparent;
+  color: rgba(255,255,255,.8);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.pano-painter-seed-btn:hover {
+  background: rgba(255,255,255,.06);
+  color: var(--fg);
+}
+.pano-painter-seed-display {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 10px;
+  color: rgba(255,255,255,.55);
+  letter-spacing: .03em;
+}
+
+/* ── Output panel ── */
+.pano-output-sublabel {
+  font-size: 10px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.45);
+  margin: 6px 0 4px;
+}
+.pano-output-sublabel:first-child { margin-top: 0; }
+.pano-output-radiogroup {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pano-output-radio {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: rgba(255,255,255,.7);
+  cursor: pointer;
+}
+.pano-output-radio input[type="radio"] { accent-color: var(--accent); }
+
+/* ── Terrain panel ── */
+.pano-terrain-row {
+  display: grid;
+  grid-template-columns: 92px 1fr 48px;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: rgba(255,255,255,.65);
+}
+.pano-terrain-row input[type="range"] { accent-color: var(--accent); width: 100%; }
+.pano-terrain-readout {
+  text-align: right;
+  color: var(--accent2);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Date picker ── */
 .pano-date-input {
   width: 100%;

@@ -101,6 +101,15 @@ export const TerrainBuilder = {
       east: seCorner.lon,
     };
 
+    // V2 Step 5c — apply state.terrain.yExaggeration before HeightSampler is
+    // populated so every downstream consumer (mesh vertices, camera ground
+    // placement, painter projection, Precipitation respawn altitude) sees the
+    // same scaled world. Default 1.0 = honest DEM, no behaviour change.
+    const yExag = state.get('terrain.yExaggeration');
+    if (Number.isFinite(yExag) && yExag !== 1.0) {
+      for (let i = 0; i < heightmap.length; i++) heightmap[i] *= yExag;
+    }
+
     HeightSampler.populate(heightmap, hmW, hmH, hmBounds, { lat, lon });
 
     // Build mesh
