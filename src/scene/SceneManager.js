@@ -51,7 +51,7 @@ async function rebuild() {
     currentTerrainGroup = newTerrain;
     scene.add(currentTerrainGroup);
 
-    // Camera + scenic default first — gives the user a usable view while OSM loads
+    // Camera + scenic default
     const scenic = ScenicDefault.suggest(location, state.get('time'));
     CameraController.lookAt(scenic.azimuth, scenic.elevation);
     CameraController.placeAt(location, EYE_HEIGHT_M);
@@ -59,31 +59,29 @@ async function rebuild() {
     const effRadius = Math.min(preset.terrainRadius, PHASE1_TERRAIN_CAP_M);
     CameraController.setWalkBounds(effRadius - WALK_HARD_BOUND_MARGIN_M);
 
-    // Phase 1.5: ground cover after terrain (HeightSampler must be populated)
-    state.emit('scene:loading', { phase: 'osm' });
-    let newOSM;
-    try {
-      newOSM = await OSMFeatureBuilder.build(location, preset);
-    } catch (err) {
-      console.warn('[SceneManager] OSM features failed:', err);
-      newOSM = null;
-    }
-
-    if (myToken !== rebuildTokenCounter) {
-      if (newOSM) disposeGroup(newOSM);
-      return;
-    }
-
-    if (currentOSMGroup) disposeGroup(currentOSMGroup);
-    if (newOSM) {
-      currentOSMGroup = newOSM;
-      scene.add(currentOSMGroup);
-    } else {
-      currentOSMGroup = null;
-    }
-
+    // The 3D viewer is functional now (terrain + sky + sun). Declare ready
+    // before the OSM cache-warm — that warm is purely opportunistic for the
+    // painter and a slow Overpass fetch must not gate the viewer or the
+    // Save image button. The painter's peek will return [] until the warm
+    // lands; subsequent paints pick up polygons automatically.
     state.set('scene.status', 'ready');
     state.emit('scene:ready', null);
+
+    // Background OSM cache-warm — fire-and-forget. Honour rebuildToken so a
+    // stale warm from an earlier preset doesn't mutate scene state for the
+    // current one.
+    OSMFeatureBuilder.build(location, preset).then(newOSM => {
+      if (myToken !== rebuildTokenCounter) {
+        if (newOSM) disposeGroup(newOSM);
+        return;
+      }
+      if (currentOSMGroup) disposeGroup(currentOSMGroup);
+      currentOSMGroup = newOSM ?? null;
+      if (newOSM) scene.add(newOSM);
+    }).catch(err => {
+      if (myToken !== rebuildTokenCounter) return;
+      console.warn('[SceneManager] OSM cache-warm failed:', err);
+    });
   } catch (err) {
     if (myToken !== rebuildTokenCounter) return;
     console.error('[SceneManager] rebuild failed:', err);
