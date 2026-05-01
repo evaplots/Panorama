@@ -2,15 +2,19 @@ import { createLocationPicker } from './LocationPicker.js';
 import { createMapPicker } from './MapPicker.js';
 import { createIconicViewGallery } from './IconicViewGallery.js';
 import { createPresetSelector } from './PresetSelector.js';
+import { createDatePicker } from './DatePicker.js';
 import { createTimeSlider } from './TimeSlider.js';
 import { createModeToggle } from './ModeToggle.js';
 import { createDebugOverlay } from './DebugOverlay.js';
 import { createPalettePicker } from './PalettePicker.js';
+import { createWeatherPanel } from './WeatherPanel.js';
 import palettes from '../style/palettes.json';
+import { desaturatePalette } from '../style/algorithm.js';
 import { state } from '../state.js';
 import { CameraController } from '../camera/CameraController.js';
 import { HeightSampler } from '../terrain/HeightSampler.js';
 import { OSMFetcher } from '../osm/OSMFetcher.js';
+import { WeatherFetcher } from '../weather/WeatherFetcher.js';
 import { categorise } from '../style/categories.js';
 import { PRESETS, DEFAULT_PRESET, EYE_HEIGHT_M } from '../config.js';
 
@@ -21,6 +25,54 @@ function resolvePainterOpts() {
     return { palette: palettes[painter].colors };
   }
   return {}; // colorthief / 'auto' — let applyPointillism extract from source
+}
+
+/**
+ * Compose the effective WeatherSnapshot from a fetched snapshot (possibly
+ * null) and the user's overrides (each field null = take fetched value;
+ * a number = use the override). Returns:
+ *   - undefined when both fetched is null AND every override is null
+ *     (the offline-curation panel hasn't been touched and the cache is
+ *     cold — painter falls back to its gradient-only path).
+ *   - a WeatherSnapshot-shaped object when at least one source is present.
+ *
+ * Per-field rule: override wins if finite, else fetched value, else null.
+ */
+function mergeWeather(fetched, overrides) {
+  const o = overrides ?? {};
+  const oWind = o.wind ?? {};
+  const fWind = fetched?.wind ?? {};
+
+  const pick = (override, fallback) =>
+    Number.isFinite(override) ? override : (fallback ?? null);
+
+  const merged = {
+    wind: {
+      directionDeg: pick(oWind.directionDeg, fWind.directionDeg),
+      speedMs:      pick(oWind.speedMs,      fWind.speedMs),
+      gustMs:       fWind.gustMs ?? null, // not user-overridable at v0
+    },
+    cloudCover_pct:    pick(o.cloudCover_pct,    fetched?.cloudCover_pct),
+    humidity_pct:      pick(o.humidity_pct,      fetched?.humidity_pct),
+    pressure_hPa:      fetched?.pressure_hPa ?? null, // not overridable at v0
+    temperature_C:     pick(o.temperature_C,     fetched?.temperature_C),
+    precipitation_mmh: pick(o.precipitation_mmh, fetched?.precipitation_mmh),
+    weatherCode:       fetched?.weatherCode ?? null,
+    timestamp:         fetched?.timestamp ?? null,
+  };
+
+  // Detect "fully empty" — all fields null. The painter binding code only
+  // looks at fields that are finite numbers, but returning undefined keeps
+  // bindings.weather absent under destructuring (matches the cold-cache,
+  // no-overrides behaviour from before this PR).
+  const anyValue =
+    Number.isFinite(merged.wind.directionDeg) ||
+    Number.isFinite(merged.wind.speedMs) ||
+    Number.isFinite(merged.cloudCover_pct) ||
+    Number.isFinite(merged.humidity_pct) ||
+    Number.isFinite(merged.precipitation_mmh) ||
+    Number.isFinite(merged.temperature_C);
+  return anyValue ? merged : undefined;
 }
 
 /**
@@ -62,9 +114,25 @@ async function buildBindings() {
     console.warn('[ControlsPanel] OSM cache peek failed at paint time, painting without polygons:', err.message);
   }
 
+  const timestamp = state.get('time.timestamp');
+
+  // Weather peek is cache-only (mirrors OSM peek). Cold cache → null fetched,
+  // and mergeWeather composes a snapshot from overrides alone (offline path).
+  // `weather` is undefined when both fetched and every override is null, which
+  // keeps the optional `weather` field in StyleBindings cleanly absent under
+  // destructuring — same shape the painter saw before this PR.
+  let fetched = null;
+  try {
+    fetched = await WeatherFetcher.peekWeather(location, timestamp);
+  } catch (err) {
+    console.warn('[ControlsPanel] Weather cache peek failed at paint time, falling back to overrides only:', err.message);
+  }
+  const overrides = state.get('weatherOverrides');
+  const weather = mergeWeather(fetched, overrides);
+
   return {
     sun: state.get('sun'),
-    timestamp: state.get('time.timestamp'),
+    timestamp,
     location,
     viewpoint: {
       location,
@@ -76,6 +144,7 @@ async function buildBindings() {
       groundY,
     },
     ground: { osmFeatures },
+    weather,
   };
 }
 
@@ -90,7 +159,9 @@ export const ControlsPanel = {
     createLocationPicker(sidebar);
     createIconicViewGallery(sidebar);
     createPalettePicker(sidebar);
+    createWeatherPanel(sidebar);
     createPresetSelector(sidebar);
+    createDatePicker(sidebar);
     createTimeSlider(sidebar);
     createModeToggle(sidebar);
     createDebugOverlay();
@@ -158,11 +229,51 @@ export const ControlsPanel = {
 
         const bindings = await buildBindings();
 
+        // Bridge weather → painter opts (DATA-CONTRACTS v0 bindings). All
+        // derivations happen at the call site per the brief — the Pointillism
+        // engine is unchanged. Each binding is gated on the relevant field
+        // being a finite number, so partial weather (overrides without a
+        // fetched snapshot, or vice versa) still works.
+        const weatherOpts = {};
+        const wx = bindings?.weather;
+        const wind = wx?.wind;
+        if (wind && Number.isFinite(wind.directionDeg) && Number.isFinite(wind.speedMs)) {
+          weatherOpts.windDirectionDeg = wind.directionDeg + 90;
+          weatherOpts.windInfluence = wind.speedMs > 1.5 ? 0.4 : 0;
+          weatherOpts.brushStrokeFactor = 1.0 * (1 + wind.speedMs / 10);
+        }
+        // Precipitation → brushOpacity. Heavy rain softens strokes;
+        // clamped to keep the painting readable at the extremes.
+        if (Number.isFinite(wx?.precipitation_mmh)) {
+          const op = 0.85 - wx.precipitation_mmh / 40;
+          weatherOpts.brushOpacity = Math.max(0.55, Math.min(0.85, op));
+        }
+
+        // Cloud cover → palette desaturation. Applied at the call site by
+        // mutating the curated-palette opt before the engine extends it.
+        // For 'auto' / ColorThief mode the engine extracts the palette
+        // internally and we cannot intercept post-extension without an
+        // engine change (the brief explicitly forbids that), so this
+        // binding only fires when a curated palette is selected at v0.
+        // Tracking issue for an engine hook lives in the curation backlog.
+        const painterOpts = resolvePainterOpts();
+        if (
+          Number.isFinite(wx?.cloudCover_pct) &&
+          Array.isArray(painterOpts.palette) &&
+          painterOpts.palette.length > 0
+        ) {
+          const factor = Math.min(0.5, wx.cloudCover_pct / 200);
+          if (factor > 0) {
+            painterOpts.palette = desaturatePalette(painterOpts.palette, factor);
+          }
+        }
+
         const { canvas: stylized, timing } = await applyPointillism(snap, {
-          ...resolvePainterOpts(),
+          ...painterOpts,
           targetPaperSize,
           targetOrientation,
           bindings,
+          ...weatherOpts,
         });
         console.log('[Pointillism] timing:', timing);
 

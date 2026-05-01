@@ -108,6 +108,25 @@ export function extractPalette(imageData, k = 20, downsampleStride = 12) {
 }
 
 /**
+ * Pull every colour in a palette toward neutral grey by `factor` (0..1).
+ * 0 = unchanged; 1 = fully grey. The brief caps the call-site usage at 0.5
+ * (cloud cover 100 → 0.5 mix) — this helper is honest about the input range
+ * and lets the caller clamp.
+ *
+ * Implementation: convert to HSL, scale saturation by (1 - factor), convert
+ * back. Lightness is preserved so the painting keeps its tonal structure as
+ * the palette goes overcast.
+ */
+export function desaturatePalette(palette, factor) {
+  if (!Array.isArray(palette) || factor <= 0) return palette;
+  const f = Math.min(1, factor);
+  return palette.map(([r, g, b]) => {
+    const [h, s, l] = rgbToHsl(r, g, b);
+    return hslToRgb(h, s * (1 - f), l);
+  });
+}
+
+/**
  * Extend a palette by adding a saturation-boosted copy plus two random
  * hue-rotated copies — yields 4× the original size. Matches palette.ts in
  * guillaume-gomez/to-pointillism. Uses the supplied PRNG so output is

@@ -103,14 +103,17 @@ export const DEFAULT_EXPORT_DPI = 300;
 
 // External API endpoints. Per CLAUDE.md rule 9, every URL here must be
 // verified live (not trusted from memory) before commit, and re-verified
-// when a phase ships. Last full audit: 2026-04-29.
+// when a phase ships. Last full audit: 2026-05-01.
 //
 //   Nominatim          — verified alive (status endpoint returns "OK")
 //   Overpass-api.de    — verified alive (2 slots reported, current timestamp)
 //   AWS Terrain Tiles  — verified alive (sample tile 0/0/0.png returns ~104 KB PNG)
+//   Open-Meteo         — verified alive 2026-05-01 (forecast endpoint, browser CORS OK, no key)
+//   Open-Meteo Archive — verified alive 2026-05-01 (HTTP 200 on /v1/archive
+//                        with Berlin lat/lon for 2024-01-15; same JSON shape
+//                        as forecast, no key, browser CORS OK)
 //
 // Future endpoints (not yet in code; documented in stub module docs):
-//   Open-Meteo         — verified alive (forecast endpoint returns valid JSON)
 //   eBird API v2       — verify before adding to wildlife module
 //   xeno-canto API     — verify before adding to wildlife module
 //   NOAA SWPC          — verify before adding to astronomy module
@@ -124,6 +127,13 @@ export const APIS = {
     'https://overpass-api.de/api/interpreter',
   ],
   awsTerrain: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium',
+  openMeteo: 'https://api.open-meteo.com/v1/forecast',
+  // Sister endpoint covering historical dates (forecast covers ~today − a few
+  // days through ~16 days ahead; archive covers everything older). Same auth
+  // (none), same JSON shape, but parameters are start_date/end_date (YYYY-MM-DD)
+  // instead of start_hour/end_hour. WeatherFetcher routes between the two
+  // based on whether the requested timestamp's UTC date is before today.
+  openMeteoArchive: 'https://archive-api.open-meteo.com/v1/archive',
   userAgent: 'Panorama/1.0 (eva.bonaccorsi@gmail.com)',
 };
 

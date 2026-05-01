@@ -5,6 +5,7 @@ import { CameraController } from '../camera/CameraController.js';
 import { ScenicDefault } from '../camera/ScenicDefault.js';
 import { TerrainBuilder } from '../terrain/TerrainBuilder.js';
 import { OSMFeatureBuilder } from '../osm/index.js';
+import { WeatherFetcher } from '../weather/WeatherFetcher.js';
 import { state } from '../state.js';
 import {
   PRESETS, DEFAULT_PRESET, EYE_HEIGHT_M,
@@ -16,6 +17,42 @@ let currentTerrainGroup = null;
 let currentOSMGroup = null;
 let rebuildTokenCounter = 0;
 let _lastTickTime = 0;
+// Hour-bucket key (lat3,lon3,hourBucketISO) of the last weather warm we
+// dispatched. Slider scrubs fire many time:changed events per second; the
+// warmWeather no-op when the bucket key is unchanged is the primary throttle
+// (Cache.dedupe inside fetchWeather is the belt-and-braces backup).
+let _lastWarmedWeatherKey = null;
+let _weatherWarmToken = 0;
+
+/**
+ * Fire-and-forget Open-Meteo warm. Gated on the hour-bucket key so that a
+ * dragging time slider triggers at most one fetch per bucket crossed.
+ * Returns silently when there's no location yet, when the bucket hasn't
+ * moved, or on any fetch error — paint-time tolerates a cold cache and the
+ * peek will simply return null.
+ */
+function warmWeather() {
+  const location = state.get('location');
+  const timestamp = state.get('time.timestamp');
+  if (!location || !timestamp) return;
+
+  const key = `${location.lat.toFixed(3)},${location.lon.toFixed(3)},${WeatherFetcher.hourBucketISO(timestamp)}`;
+  if (key === _lastWarmedWeatherKey) return;
+  _lastWarmedWeatherKey = key;
+
+  const myToken = ++_weatherWarmToken;
+  WeatherFetcher.fetchWeather(location, timestamp).then(() => {
+    if (myToken !== _weatherWarmToken) return;
+    // WeatherPanel listens to refresh its placeholders. Payload is null
+    // because the panel re-peeks the cache itself — we don't want to ship
+    // the snapshot through the bus and risk staleness if the bucket has
+    // moved between fetch-issue and fetch-resolve.
+    state.emit('weather:fetched', null);
+  }).catch(err => {
+    if (myToken !== _weatherWarmToken) return;
+    console.warn('[SceneManager] weather warm failed:', err.message);
+  });
+}
 
 function disposeGroup(group) {
   group.traverse(obj => {
@@ -137,10 +174,17 @@ export const SceneManager = {
     camera = CameraController.init(canvas);
     SkySystem.init(scene, renderer);
 
-    state.on('location:changed', rebuild);
+    state.on('location:changed', () => {
+      // location change always crosses the per-location bucket key; reset
+      // so warmWeather doesn't no-op on the new lat/lon.
+      _lastWarmedWeatherKey = null;
+      rebuild();
+      warmWeather();
+    });
     state.on('preset:changed', () => {
       if (state.get('location')) rebuild();
     });
+    state.on('time:changed', warmWeather);
 
     window.addEventListener('resize', () => Renderer.handleResize(canvas, camera));
 
