@@ -8,6 +8,8 @@
     "preview": "vite preview",
     "format": "prettier --write src/",
     "test": "node scripts/test-stroke-scale.js",
+    "probes:painter:sort": "node scripts/foreground-polygon-sort-probe.js",
+    "probes:painter:foreground": "node scripts/foreground-polygon-coverage-probe.js",
     "pointillism": "node scripts/pointillism-test.js",
     "gallery": "node scripts/build-gallery.js",
     "matrix": "node scripts/build-matrix-gallery.js",
