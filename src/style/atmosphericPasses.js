@@ -173,10 +173,14 @@ function projectSunDir(pc, sun) {
  * @param {CanvasRenderingContext2D} ctx              The canvas to mutate.
  * @param {import('./projection.js').ProjectionContext} projectionCtx
  *        Used to compute the horizon Y. May be null — when null the haze
- *        falls back to a flat top-third sky / bottom-two-thirds terrain
- *        split, which is enough to keep the pass non-degenerate during
- *        early-app boot and node-side probes that don't construct a full
- *        viewpoint.
+ *        pass is a no-op. (A previous version invented a flat horizon at
+ *        40 % from the top so the pass would still "do something" on a
+ *        snapshot-less canvas; that produced a desaturated greyish
+ *        rectangle filling the lower 60 % of the canvas whenever the
+ *        underpainting preview ran with no location selected — and an
+ *        identical rectangle layered onto every with-snapshot scene
+ *        too. Atmospheric perspective is a function of scene depth; with
+ *        no scene there is nothing to model.)
  * @param {{phase: string}} [sun]                     Sun phase enum drives tint.
  * @param {Object}      [opts]
  * @param {number}      [opts.hazeStrength]   0..1 (default 0.5)
@@ -188,21 +192,20 @@ export function applyHaze(ctx, projectionCtx, sun, opts = {}) {
   if (strength <= 0) {
     return { strength: 0, hazedPixels: 0, ms: 0 };
   }
+  if (!projectionCtx) {
+    // No scene → no atmospheric perspective. See JSDoc above for the
+    // rationale and the artefact the previous fallback produced.
+    const ms = +(performance.now() - t0).toFixed(1);
+    return { strength: 0, hazedPixels: 0, ms };
+  }
 
   const W = ctx.canvas.width;
   const H = ctx.canvas.height;
   const phase = sun?.phase ?? 'day';
   const tint = HAZE_TINT[phase] ?? HAZE_TINT.day;
 
-  // Horizon Y. When projectionCtx is missing (early boot / probes), use
-  // 40 % from the top — the sky-occupies-upper-third painterly default.
-  let horizonY;
-  if (projectionCtx) {
-    const projector = createProjector(projectionCtx);
-    horizonY = projector.horizonY();
-  } else {
-    horizonY = H * 0.40;
-  }
+  const projector = createProjector(projectionCtx);
+  let horizonY = projector.horizonY();
   // Horizon clamp: if the camera is tilted heavily up or down, the
   // analytic horizon can sit far off-canvas, which would either skip the
   // haze entirely (sky-only frames) or apply uniform haze (ground-only
