@@ -137,6 +137,11 @@ export function createMapPicker(container) {
   let bearingMarker = null;
   let conePoly = null;
   let bearingLine = null;
+  // Set true on any marker dragstart; consumed by the next map.click.
+  // Leaflet emits a `click` on the map at the release coordinate when a
+  // marker drag ends, which would otherwise cause placePin() to move
+  // the position pin to wherever the user released the bearing arrow.
+  let suppressNextMapClick = false;
 
   function updateReadout() {
     if (local.lat == null) {
@@ -197,7 +202,13 @@ export function createMapPicker(container) {
           state.set('viewpoint.azimuth', local.azimuthDeg);
           redrawCone();
           updateReadout();
-        });
+        })
+        // Leaflet quirk: after a marker drag releases, the next `click` on
+        // the map fires at the release coordinate. Without this, releasing
+        // the bearing arrow would also trigger map.on('click') → placePin →
+        // the position pin jumps to where the bearing was released. The
+        // dragstart sets the suppress flag; map.click checks and clears it.
+        .on('dragstart', () => { suppressNextMapClick = true; });
     }
   }
 
@@ -222,7 +233,10 @@ export function createMapPicker(container) {
         // location (which triggers a terrain rebuild) on dragend. While
         // mid-drag the camera-follower sync is paused so a stray
         // viewpoint:changed event doesn't fight the user's drag.
-        .on('dragstart', () => { pinReflectsCamera = false; })
+        .on('dragstart', () => {
+          pinReflectsCamera = false;
+          suppressNextMapClick = true;
+        })
         .on('drag', e => {
           const ll = e.target.getLatLng();
           local.lat = ll.lat;
@@ -237,7 +251,10 @@ export function createMapPicker(container) {
     if (commit) commitLocation();
   }
 
-  map.on('click', e => placePin(e.latlng.lat, e.latlng.lng));
+  map.on('click', e => {
+    if (suppressNextMapClick) { suppressNextMapClick = false; return; }
+    placePin(e.latlng.lat, e.latlng.lng);
+  });
 
   fovSlider.addEventListener('input', () => {
     local.fovDeg = parseInt(fovSlider.value, 10);
