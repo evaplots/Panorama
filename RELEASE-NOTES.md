@@ -1,5 +1,83 @@
 # Panorama — release notes
 
+## chore — Live preview is now a 3D-scene mirror, not a painter preview (2026-05-02)
+
+The live preview panel used to drive a sub-50 ms painter render
+(`paintGround → paintWater → paintCanopy → paintLandmarks → median →
+applyAtmospherics`) so curators could see slider changes update in
+real time. In practice the preview ended up showing things that
+weren't in the 3D scene the user was composing against:
+
+- Abstract building silhouettes from `paintLandmarks` (towers, churches,
+  monuments, castles, attractions are painted as painterly archetypes,
+  not as the actual buildings' shapes).
+- A foreground tinted band from `applyHaze` (haze covers below-horizon
+  pixels with a phase-tinted gradient — useful at export time, but not
+  what the user wants to see while composing).
+- Polygon over-paint that doesn't match the WebGL terrain the 3D viewer
+  shows.
+
+The preview now mirrors the 3D viewer's WebGL canvas directly,
+downsampled to the export aspect ratio. What you see in the preview is
+exactly what the 3D viewer is rendering — terrain, sky, sun, clouds —
+cropped to the chosen paper format and orientation.
+
+### What this changes
+
+- `src/ui/UnderpaintingPreviewPanel.js` — `renderNow()` is now a
+  synchronous `drawImage` of the live `panorama-canvas` onto the panel
+  canvas. No `buildSnapshot()`, no `renderUnderpainting()`, no painter
+  options threaded through. ~70 lines removed; the file is now ~115
+  lines vs ~295 before.
+- The "Soften edges" toggle and the painter-related stat readout
+  (`canopy dabs · h₂o · landmark mks`) are removed. Stat readout is
+  now just `<n> ms` for the mirror operation (typically <1 ms).
+- The `painter:changed` event subscription is removed: painter
+  sliders no longer affect the preview (they affect the export
+  pipeline only).
+- Header text changes from "Preview — composition only" to
+  "Preview — 3D scene at export aspect" so the panel's role is
+  unambiguous.
+
+### What this does NOT change
+
+The painter pipeline is unchanged. The Test pointillism / Save image
+buttons in `ControlsPanel` still run the full `applyPointillism` chain,
+including `paintLandmarks` and `applyAtmospherics`. The painterly
+output is now a strictly user-triggered transform — the preview shows
+the *composition*, the export shows the *painting*.
+
+`paintLandmarks`, `paintCanopy`, `paintGround`, `paintWater`, the
+median blur, and the atmospheric passes all still exist and run at
+export time. If a future curator wants a painter preview back, the
+old code path is one revert away; the simpler 3D mirror is
+established as the default because the painter preview's
+non-faithful overlays were getting in the way of composition more
+than they were helping.
+
+### Rationale (for the next reader)
+
+The Decision Log entry that introduced the painter preview ("Live
+underpainting preview reversed the 'no real-time preview' non-goal,
+2026-05-01") argued the painter preview was faithful enough to drive
+curation decisions. After living with it, the user disagreed: the
+painted overlays diverge from the underlying 3D scene in ways that
+made composition decisions harder, not easier. This commit is the
+honest reframing — the painter is a one-shot user-triggered
+transform; the live preview is a 3D-scene mirror; both have a clear
+role.
+
+### Files changed
+
+```
+src/ui/UnderpaintingPreviewPanel.js    pass-through 3D-scene mirror
+RELEASE-NOTES.md                       this entry
+```
+
+State schema unchanged. DATA-CONTRACTS unchanged. No new dependencies.
+No code is removed from `src/style/`; the painter pipeline still runs
+at export time exactly as before.
+
 ## V2 — Atmospheric depth (released 2026-05-01)
 
 Three painterly post-passes that turn the painting from "diagram" into
