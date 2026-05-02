@@ -70,5 +70,3 @@ export function categorise(tags) {
   }
   return best;
 }
-
-export const CATEGORIES = ['water', 'forest', 'urban', 'farmland', 'beach'];
