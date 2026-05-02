@@ -197,6 +197,14 @@ export const ControlsPanel = {
           waterReflectionStrength: p.water?.reflectionStrength ?? 0.6,
           waterSunGlitterEnabled: p.water?.sunGlitterEnabled ?? true,
           waterRippleDensity: p.water?.rippleDensity ?? 0.4,
+          // Atmospheric-depth post-passes (Phase 5 polish) — haze, sun
+          // bloom, grain + colour grading. Defaults match the engine
+          // baseline; toggle off via the "Atmospherics enabled" checkbox
+          // produces byte-identical output to pre-PR for regression tests.
+          atmosphericsEnabled: p.atmospherics?.enabled !== false,
+          hazeStrength: p.atmospherics?.hazeStrength ?? 0.5,
+          bloomStrength: p.atmospherics?.bloomStrength ?? 0.4,
+          grainAmount: p.atmospherics?.grainAmount ?? 0.15,
         };
         // Wind-tilt override semantics: when finite, the user wants
         // unconditional control — force windInfluence and let the panel

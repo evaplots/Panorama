@@ -123,6 +123,13 @@ panel calls only the first.
    │   4. paintCanopy       stippled forest dabs (PR #12)        │
    │   5. paintLandmarks    silhouette marks (PR #12)            │
    │   6. Optional: median-blur softening (auto-scaled kernel)   │
+   │   7. Atmospheric depth post-passes (v3.12):                 │
+   │        applyHaze       distance-based desaturation toward    │
+   │                        sky-tinted horizon                   │
+   │        applySunBloom   soft warm halo at projected sun       │
+   │                        position (above-horizon + in-canvas)  │
+   │        applyGrainAndGrade Mulberry32 paper-grain + global    │
+   │                        sun-phase grade (composite ops)       │
    │  Returns { canvas, srcData, timing }                        │
    └─────────────────────────────────────────────────────────────┘
                              │

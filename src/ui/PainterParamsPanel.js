@@ -27,6 +27,15 @@ const WATER_SLIDER_FIELDS = [
   { label: 'Ripple density',    path: 'painter.water.rippleDensity',      min: 0, max: 1, step: 0.01,  unit: '',    decimals: 2 },
 ];
 
+// Atmospheric-depth sliders (Phase 5). Rendered in their own subgroup
+// after Water so the post-passes read as "everything that happens AFTER
+// the underpainting paint, in display order": haze → bloom → grain.
+const ATMOSPHERICS_SLIDER_FIELDS = [
+  { label: 'Haze',              path: 'painter.atmospherics.hazeStrength',  min: 0, max: 1, step: 0.01, unit: '',   decimals: 2 },
+  { label: 'Sun bloom',         path: 'painter.atmospherics.bloomStrength', min: 0, max: 1, step: 0.01, unit: '',   decimals: 2 },
+  { label: 'Grain',             path: 'painter.atmospherics.grainAmount',   min: 0, max: 1, step: 0.01, unit: '',   decimals: 2 },
+];
+
 function fmt(value, decimals) {
   if (!Number.isFinite(value)) return '—';
   return decimals === 0 ? String(Math.round(value)) : value.toFixed(decimals);
@@ -122,17 +131,23 @@ function makeWindTiltRow(parent) {
 }
 
 function makeWaterGlitterRow(parent) {
+  return makeBoolRow(parent, 'Sun glitter', 'painter.water.sunGlitterEnabled');
+}
+
+// Generic on/off toggle row, used by water-glitter and atmospherics-enabled.
+// Reused so the two checkboxes follow the same DOM shape and selectors.
+function makeBoolRow(parent, label, statePath) {
   const row = document.createElement('label');
   row.className = 'pano-painter-row pano-painter-row-toggle';
 
-  const label = document.createElement('span');
-  label.className = 'pano-painter-label';
-  label.textContent = 'Sun glitter';
-  row.appendChild(label);
+  const labelEl = document.createElement('span');
+  labelEl.className = 'pano-painter-label';
+  labelEl.textContent = label;
+  row.appendChild(labelEl);
 
   const input = document.createElement('input');
   input.type = 'checkbox';
-  input.checked = !!state.get('painter.water.sunGlitterEnabled');
+  input.checked = !!state.get(statePath);
   row.appendChild(input);
 
   const readout = document.createElement('span');
@@ -141,7 +156,7 @@ function makeWaterGlitterRow(parent) {
   row.appendChild(readout);
 
   input.addEventListener('input', () => {
-    state.set('painter.water.sunGlitterEnabled', input.checked);
+    state.set(statePath, input.checked);
     readout.textContent = input.checked ? 'on' : 'off';
   });
 
@@ -201,6 +216,17 @@ export function createPainterParamsPanel(parentEl) {
   list.appendChild(waterHead);
   for (const field of WATER_SLIDER_FIELDS) makeSlider(list, field);
   makeWaterGlitterRow(list);
+
+  // Atmosphere subgroup: haze, sun bloom, grain. Toggle at the top so the
+  // user can disable all three in one click for a fast comparison view —
+  // sometimes you want to see what the painting looks like without the
+  // post passes.
+  const atmHead = document.createElement('div');
+  atmHead.className = 'pano-painter-subhead';
+  atmHead.textContent = 'Atmosphere';
+  list.appendChild(atmHead);
+  makeBoolRow(list, 'Atmospherics enabled', 'painter.atmospherics.enabled');
+  for (const field of ATMOSPHERICS_SLIDER_FIELDS) makeSlider(list, field);
 
   makeSeedRow(section);
 

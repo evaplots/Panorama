@@ -1,4 +1,4 @@
-// State schema version: 6
+// State schema version: 7
 // See DATA-CONTRACTS.md
 import { DEFAULT_PRESET } from './config.js';
 
@@ -94,6 +94,25 @@ const _state = {
       reflectionStrength: 0.6,
       sunGlitterEnabled: true,
       rippleDensity: 0.4,
+    },
+    // Atmospheric depth post-passes (Phase 5 polish, schema v7).
+    // Three painterly post-passes that run after the median-blur softening:
+    //   - hazeStrength: 0..1 — distance-based desaturation toward the
+    //     sky-tinted horizon. 0 = no haze; 1 = full atmospheric recession.
+    //   - bloomStrength: 0..1 — soft warm halo at the projected sun
+    //     position. Only fires when sun above horizon AND in view.
+    //   - grainAmount: 0..1 — Mulberry32-seeded paper-texture noise.
+    //   - enabled: bool — global toggle for fast comparison "with vs
+    //     without". When false the post-passes no-op and the output is
+    //     byte-identical to pre-PR for regression testing.
+    // PainterParamsPanel surfaces all four under an "Atmosphere" subgroup;
+    // the live UnderpaintingPreviewPanel re-renders on `painter:changed`
+    // so sliding the sliders updates the preview in real time.
+    atmospherics: {
+      enabled: true,
+      hazeStrength: 0.5,
+      bloomStrength: 0.4,
+      grainAmount: 0.15,
     },
   },
   // V2 Step 5c: TerrainPanel surface. yExaggeration multiplies the heightmap

@@ -29,6 +29,7 @@ import { paintWater } from './waterPainter.js';
 import { paintCanopy } from './canopyPainter.js';
 import { paintLandmarks } from './landmarkPainter.js';
 import { medianBlur11 } from './algorithm.js';
+import { applyAtmospherics } from './atmosphericPasses.js';
 
 // Inline copy of `computeEffectiveDpi` from Pointillism.js — kept local to
 // avoid the circular import that would otherwise arise (Pointillism imports
@@ -61,6 +62,16 @@ const DEFAULTS = {
   waterReflectionStrength: 0.6,
   waterSunGlitterEnabled: true,
   waterRippleDensity: 0.4,
+  // Atmospheric depth knobs (Phase 5 polish) — three painterly post-passes
+  // that run after the median-blur softening: haze, sun bloom, grain +
+  // grading. Surfaced through PainterParamsPanel as state.painter.atmospherics.*.
+  // Defaults match the panel defaults; `atmosphericsEnabled: false` skips the
+  // entire orchestrator and produces byte-identical output to pre-PR for
+  // regression testing.
+  atmosphericsEnabled: true,
+  hazeStrength: 0.5,
+  bloomStrength: 0.4,
+  grainAmount: 0.15,
 };
 
 // Auto-kernel scaling: the 11×11 reference was tuned for A3 short edge
@@ -140,9 +151,24 @@ export async function renderUnderpainting(sourceCanvas, opts = {}) {
   let canopyMs = 0;
   let landmarkMs = 0;
 
-  if (o.bindings?.viewpoint && o.bindings?.ground) {
+  // Effective DPI is needed by the painter's brushThicknessPx and by the
+  // atmospherics post-passes (bloom radius, grain cell size — both
+  // physically sized in mm). Compute once at the top so the post-pass
+  // path doesn't recompute it.
+  const effectiveDpi = o.dpi != null
+    ? o.dpi
+    : computeEffectiveDpi(width, height, o.targetPaperSize, o.targetOrientation);
+
+  // Projection context is hoisted so the atmospherics path (haze depth,
+  // sun bloom projection) can reuse it after the bindings-gated painter
+  // block. Both the painter block and the atmospherics block read from
+  // this; when bindings are absent, the painter block is skipped but
+  // atmospherics still falls back gracefully (haze uses a default
+  // horizon, bloom no-ops without sun data).
+  let projectionCtx = null;
+  if (o.bindings?.viewpoint && o.bindings.viewpoint.location) {
     const vp = o.bindings.viewpoint;
-    const projectionCtx = {
+    projectionCtx = {
       originLat: vp.location.lat,
       originLon: vp.location.lon,
       azimuthDeg: vp.azimuthDeg,
@@ -153,7 +179,9 @@ export async function renderUnderpainting(sourceCanvas, opts = {}) {
       canvasWidth: width,
       canvasHeight: height,
     };
+  }
 
+  if (projectionCtx && o.bindings?.ground) {
     groundPolygonCount = paintGround(
       wctx, projectionCtx, o.bindings.ground, o.bindings.sun,
     );
@@ -161,9 +189,6 @@ export async function renderUnderpainting(sourceCanvas, opts = {}) {
     // Canopy / landmark / water painters all need the same brushThicknessPx
     // the stroke pass uses, so painted texture matches stroke density at
     // the chosen DPI. Same formula as Pointillism's stroke-pass setup.
-    const effectiveDpi = o.dpi != null
-      ? o.dpi
-      : computeEffectiveDpi(width, height, o.targetPaperSize, o.targetOrientation);
     const brushThicknessPx = Math.max(
       1,
       Math.round(o.brushWidthMm * effectiveDpi / 25.4),
@@ -237,6 +262,28 @@ export async function renderUnderpainting(sourceCanvas, opts = {}) {
     ctx.drawImage(working, 0, 0);
   }
 
+  // ─── Atmospheric post-passes (Phase 5) ────────────────────────────────
+  // Three painterly post-passes after the median blur: distance-based
+  // haze, soft sun bloom, grain + global colour grading. Order is
+  // haze → bloom → grain (haze before bloom so the bloom isn't hazed,
+  // grain last so it reads as physical paper texture rather than as
+  // blurred noise). When `atmosphericsEnabled` is false the orchestrator
+  // is a no-op and the output is byte-identical to pre-PR.
+  const atmosphericsResult = applyAtmospherics(
+    ctx,
+    projectionCtx,
+    o.bindings?.sun,
+    {
+      enabled: o.atmosphericsEnabled,
+      hazeStrength: o.hazeStrength,
+      bloomStrength: o.bloomStrength,
+      grainAmount: o.grainAmount,
+      effectiveDpi,
+      seed: o.seed,
+      createCanvas,
+    },
+  );
+
   const totalMs = +(performance.now() - tStart).toFixed(1);
 
   return {
@@ -255,6 +302,13 @@ export async function renderUnderpainting(sourceCanvas, opts = {}) {
       paintMs: +(tPaintEnd - tStart).toFixed(1),
       medianMs,
       medianKernelUsed,
+      atmosphericsEnabled: atmosphericsResult.enabled,
+      hazeMs: atmosphericsResult.hazeMs,
+      bloomMs: atmosphericsResult.bloomMs,
+      grainMs: atmosphericsResult.grainMs,
+      bloomFired: atmosphericsResult.bloomFired,
+      hazedPixels: atmosphericsResult.hazedPixels,
+      atmosphericsMs: atmosphericsResult.totalMs,
       underpaintMs: totalMs,
     },
   };
