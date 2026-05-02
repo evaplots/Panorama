@@ -1,125 +1,88 @@
 # Panorama — release notes
 
-## feat — Map pegman follows the 3D camera (2026-05-02)
+## fix — Foreground-rectangle artefact in the no-Snapshot underpainting (2026-05-02)
 
-The map's pin and bearing arrow now update live as the user moves and
-orbits in the 3D scene. Previously the map → 3D direction worked
-(click a pin, set bearing, hit "View in 3D") but the reverse didn't —
-once you were in the 3D view, walking forward or orbiting the camera
-left the map showing the original drop point.
+A desaturated greyish rectangle filled the lower 60 % of the
+underpainting preview whenever the panel rendered without a Snapshot —
+e.g. the very first frame after app boot, before the user has selected
+a location. The same artefact also looked like it was layered onto
+scenes that did have a Snapshot loaded; it wasn't, but the haze pass's
+default-tilt overlay reads close enough to the no-Snapshot rectangle
+that the two were easy to confuse.
 
-Now:
+### Root cause
 
-- **Orbit** (mouse drag in 3D viewer) → bearing arrow on the map
-  rotates to match the camera azimuth. FOV slider + readout sync to
-  the wheel-zoom.
-- **Walk mode** (WASD) → the pin moves to follow the walker's
-  position, computed from the scene-origin lat/lon plus the walker's
-  world-XZ offset. The map is NOT auto-recentred — the user can pan
-  if they want; auto-pan would fight any deliberate pan they've
-  already done.
-- **Walker reset / mode switch** → walker anchor returns to (0, 0),
-  pin snaps back to scene origin.
+`applyHaze` in `src/style/atmosphericPasses.js` had a deliberate
+"non-degenerate fallback" for the case where `projectionCtx` was null:
+when the projector couldn't compute a real horizon Y, the pass invented
+one at `H * 0.40` (roughly the painterly default) and proceeded to apply
+its phase-tinted gradient over the synthetic below-horizon strip. The
+rationale documented in the JSDoc was "keep the pass useful during
+early-app boot and node-side probes that don't construct a full
+viewpoint." In practice, the pass painted a desaturated greyish band
+over the lower 60 % of any canvas with no Snapshot — at `phase=day`
+that's `HAZE_TINT.day = [200, 215, 230]` over whatever WebGL frame had
+been drawn, with cosine-falloff alpha peaking at 0.5. That's the user's
+"foreground rectangle."
 
-### What this changes
+The misdiagnosis trail (recorded for posterity): the artefact looked
+identical to what waterPainter could produce when fed a giant water
+polygon, so the brief originally pointed at PR #14. Polygon-level
+instrumentation in waterPainter showed water polygons projecting as
+1-pixel-tall slivers at the horizon for both the Chamonix and inland
+Saarland test locations — far too small to fill the foreground. The
+new evidence — *the rectangle is still there with no location, no
+Snapshot, no OSM data* — ruled out every water hypothesis and pointed
+straight at atmospherics. A pass-bisection probe confirmed: with
+`hazeStrength = 0`, the rectangle vanishes.
 
-- `src/ui/MapPicker.js` — adds an `anchorToLatLon` helper (mirrors
-  `HeightSampler.getHeightAtWorld`'s coordinate frame so the pin
-  lands exactly under the walker, sub-metre), subscribes to
-  `viewpoint:changed`, and applies the update via rAF batching (camera
-  drag fires dozens of events/sec; we only need one map update per
-  frame).
-- New `pinReflectsCamera` flag distinguishes two states: the pin
-  *follows the camera* (after a committed location, default), or the
-  pin reflects an *uncommitted user click* on the map (proposed
-  scene, doesn't get snapped back when the user orbits the still-old
-  3D scene). Click → `false`. `location:changed` (commit or search) →
-  `true`.
+### Fix
 
-### What this does NOT change
+Single-line behavioural change in `applyHaze`: when `projectionCtx` is
+null, return zeroed early instead of inventing a horizon. Atmospheric
+perspective is a function of scene depth; with no scene there is no
+perspective to model, so painting one is wrong, not "graceful." The
+JSDoc is updated to record what the previous fallback did and why it
+was removed, so the next person reading the code doesn't put it back.
 
-The map → 3D direction is unchanged. Drop a pin, drag bearing, click
-"View in 3D" — same flow as before.
+`applySunBloom` already short-circuited on null projection (it depends
+on the sun's *projected* screen position, not just its altitude), and
+`applyGrainAndGrade` is projection-independent by design — both passes
+needed no change.
 
-The FOV slider on the map still doesn't `state.set` on input — it
-only commits on "View in 3D" click. So changing the slider mid-flight
-doesn't immediately zoom the 3D viewer; the wheel in the 3D viewer
-is the live FOV control.
+### Probes
+
+`scripts/no-snapshot-rectangle-probe.js` — five render variants on a
+flat-colour source canvas with `bindings: null`:
+
+```
+full               hazedPixels=      0 bloomFired=false hazeMs=    0
+no-haze            hazedPixels=      0 bloomFired=false hazeMs=    0
+no-bloom           hazedPixels=      0 bloomFired=false hazeMs=    0
+no-grain           hazedPixels=      0 bloomFired=false hazeMs=    0
+no-atmospherics    hazedPixels=      0 bloomFired=false hazeMs=    0
+```
+
+Pre-fix, `full` reported `hazedPixels = 91 680` (~56 % of a 480×340
+preview, exactly the below-fake-horizon area). Post-fix all variants
+report 0 hazed pixels — `full` is byte-equivalent to the source
+canvas plus grain, with no haze rectangle.
+
+`scripts/atmospheric-perf-probe.js haze` (with-Snapshot regression
+guard) still passes: alpine-vista vs urban-courtyard delta differential
+is 0.451, well above the 0.35 pass bar — haze with a real
+`projectionCtx` continues to do exactly what PR #15 designed it to do.
 
 ### Files changed
 
 ```
-src/ui/MapPicker.js     +viewpoint:changed sync, +pinReflectsCamera flag
-RELEASE-NOTES.md        this entry
+src/style/atmosphericPasses.js              applyHaze: skip when projectionCtx is null
+RELEASE-NOTES.md                            this entry
+scripts/no-snapshot-rectangle-probe.js      new — regression guard
+.iterations/2026-05-02-no-snapshot/         new — five-variant bisection outputs
 ```
 
-State schema unchanged. DATA-CONTRACTS unchanged. No new dependencies.
-
-## chore — Live preview is now a 3D-scene mirror, not a painter preview (2026-05-02)
-
-The live preview panel used to drive a sub-50 ms painter render
-(`paintGround → paintWater → paintCanopy → paintLandmarks → median →
-applyAtmospherics`) so curators could see slider changes update in
-real time. In practice the preview ended up showing things that
-weren't in the 3D scene the user was composing against:
-
-- Abstract building silhouettes from `paintLandmarks` (towers, churches,
-  monuments, castles, attractions are painted as painterly archetypes,
-  not as the actual buildings' shapes).
-- A foreground tinted band from `applyHaze` (haze covers below-horizon
-  pixels with a phase-tinted gradient — useful at export time, but not
-  what the user wants to see while composing).
-- Polygon over-paint that doesn't match the WebGL terrain the 3D viewer
-  shows.
-
-The preview now mirrors the 3D viewer's WebGL canvas directly,
-downsampled to the export aspect ratio. What you see in the preview is
-exactly what the 3D viewer is rendering — terrain, sky, sun, clouds —
-cropped to the chosen paper format and orientation.
-
-### What this changes
-
-- `src/ui/UnderpaintingPreviewPanel.js` — `renderNow()` is now a
-  synchronous `drawImage` of the live `panorama-canvas` onto the panel
-  canvas. No `buildSnapshot()`, no `renderUnderpainting()`, no painter
-  options threaded through. ~70 lines removed; the file is now ~115
-  lines vs ~295 before.
-- The "Soften edges" toggle and the painter-related stat readout
-  (`canopy dabs · h₂o · landmark mks`) are removed. Stat readout is
-  now just `<n> ms` for the mirror operation (typically <1 ms).
-- The `painter:changed` event subscription is removed: painter
-  sliders no longer affect the preview (they affect the export
-  pipeline only).
-- Header text changes from "Preview — composition only" to
-  "Preview — 3D scene at export aspect" so the panel's role is
-  unambiguous.
-
-### What this does NOT change
-
-The painter pipeline is unchanged. The Test pointillism / Save image
-buttons in `ControlsPanel` still run the full `applyPointillism` chain,
-including `paintLandmarks` and `applyAtmospherics`. The painterly
-output is now a strictly user-triggered transform — the preview shows
-the *composition*, the export shows the *painting*.
-
-`paintLandmarks`, `paintCanopy`, `paintGround`, `paintWater`, the
-median blur, and the atmospheric passes all still exist and run at
-export time. If a future curator wants a painter preview back, the
-old code path is one revert away; the simpler 3D mirror is
-established as the default because the painter preview's
-non-faithful overlays were getting in the way of composition more
-than they were helping.
-
-### Files changed
-
-```
-src/ui/UnderpaintingPreviewPanel.js    pass-through 3D-scene mirror
-RELEASE-NOTES.md                       this entry
-```
-
-State schema unchanged. DATA-CONTRACTS unchanged. No new dependencies.
-No code is removed from `src/style/`; the painter pipeline still runs
-at export time exactly as before.
+State schema unchanged. No new dependencies.
 
 ## V2 — Atmospheric depth (released 2026-05-01)
 
