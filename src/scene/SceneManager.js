@@ -131,7 +131,7 @@ async function rebuild() {
     // Camera + scenic default
     const scenic = ScenicDefault.suggest(location, state.get('time'));
     CameraController.lookAt(scenic.azimuth, scenic.elevation);
-    CameraController.placeAt(location, EYE_HEIGHT_M);
+    CameraController.placeAt(location, state.get('viewpoint.eyeHeight') ?? EYE_HEIGHT_M);
     // Phase 2: walker may not leave the loaded terrain
     const effRadius = Math.min(preset.terrainRadius, PHASE1_TERRAIN_CAP_M);
     CameraController.setWalkBounds(effRadius - WALK_HARD_BOUND_MARGIN_M);
