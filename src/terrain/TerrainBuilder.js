@@ -2,7 +2,13 @@ import * as THREE from 'three';
 import { fetchTile } from './DEMFetcher.js';
 import { HeightSampler } from './HeightSampler.js';
 import { TileMath } from '../data/TileMath.js';
-import { DEM_TILE_ZOOM, PHASE1_TERRAIN_CAP_M, TERRAIN_MESH_SEGMENTS } from '../config.js';
+import {
+  DEM_TILE_ZOOM,
+  PHASE1_TERRAIN_CAP_M,
+  TERRAIN_MESH_SEGMENTS,
+  TERRAIN_INNER_MESH_RADIUS_M,
+  TERRAIN_INNER_MESH_SEGMENTS,
+} from '../config.js';
 import { state } from '../state.js';
 
 /** Clamp terrain radius to Phase 1 cap (single-zoom mesh). */
@@ -112,44 +118,102 @@ export const TerrainBuilder = {
 
     HeightSampler.populate(heightmap, hmW, hmH, hmBounds, { lat, lon });
 
-    // Build mesh
-    const widthM = radius * 2;
-    const heightM = radius * 2;
-    const segs = TERRAIN_MESH_SEGMENTS;
-
-    const geometry = new THREE.PlaneGeometry(widthM, heightM, segs, segs);
-    geometry.rotateX(-Math.PI / 2); // XY → XZ plane
-
-    const posAttr = geometry.attributes.position;
-    const count = posAttr.count;
-    const colors = new Float32Array(count * 3);
-    const col = new THREE.Color();
-
-    for (let i = 0; i < count; i++) {
-      const wx = posAttr.getX(i);
-      const wz = posAttr.getZ(i);
-      const { lon: pLon, lat: pLat } = TileMath.localToLonLat(wx, wz, lon, lat);
-      const h = HeightSampler.getHeightAt(pLat, pLon);
-      posAttr.setY(i, h);
-      elevationColor(h, col);
-      colors[i * 3] = col.r;
-      colors[i * 3 + 1] = col.g;
-      colors[i * 3 + 2] = col.b;
-    }
-
-    posAttr.needsUpdate = true;
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    geometry.computeVertexNormals();
-
-    const material = new THREE.MeshLambertMaterial({ vertexColors: true });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.receiveShadow = true;
-
     const group = new THREE.Group();
     group.name = 'terrain';
-    group.add(mesh);
+
+    // ─── Outer mesh: full radius, coarse triangulation ──────────────────
+    // 30 km × 30 km (with PHASE1_TERRAIN_CAP_M=15000) at 512 segments →
+    // vertex spacing ~58.6 m. This covers the visible vista all the way
+    // out to the horizon.
+    const widthM = radius * 2;
+    const heightM = radius * 2;
+    group.add(buildMeshTier(widthM, heightM, TERRAIN_MESH_SEGMENTS, 'terrain.outer', lat, lon, false));
+
+    // ─── Inner concentric mesh: ~500 m, fine triangulation ──────────────
+    // The outer mesh's near-camera region is one ~58.6 m × 58.6 m triangle
+    // pair, so everything from canvas-bottom (~3.5 m at -5° tilt) to
+    // ~29 m (the nearest outer vertex) renders inside that one triangle
+    // and the foreground reads as a flat-coloured trapezoid. The inner
+    // mesh adds 256² triangles inside a 1 km × 1 km patch around the
+    // chosen location (vertex spacing ~3.9 m), giving the same DEM-derived
+    // surface real per-vertex variation in the camera's first ~500 m.
+    //
+    // World-anchored at (0, 0, 0) — same origin as the outer mesh — so it
+    // is rebuilt only on `location:changed`. Walk-mode users beyond the
+    // 500 m radius see foreground degrade back to the outer mesh; this
+    // is a deliberate v1 trade-off for the project's compose-then-paint
+    // flow. See `.iterations/2026-05-02-foreground-rendering/DIAGNOSIS.md`.
+    //
+    // polygonOffset on the inner material wins the depth test against
+    // the outer mesh in the overlapping region without cutting a hole
+    // in the outer mesh — both meshes sample HeightSampler so the
+    // surface is continuous; the inner just has finer triangulation.
+    if (TERRAIN_INNER_MESH_RADIUS_M > 0) {
+      const innerWidthM = TERRAIN_INNER_MESH_RADIUS_M * 2;
+      group.add(buildMeshTier(
+        innerWidthM, innerWidthM,
+        TERRAIN_INNER_MESH_SEGMENTS,
+        'terrain.inner',
+        lat, lon,
+        true,    // polygonOffset
+      ));
+    }
 
     state.emit('scene:progress', { progress: 0.9 });
     return group;
   },
 };
+
+/**
+ * Build one PlaneGeometry mesh tier sampling Y from HeightSampler at each
+ * vertex. Pure helper used by both tiers — same elevation-colour ramp,
+ * same lambert lighting, same DEM source. Difference is segment count
+ * (and the inner tier sets polygonOffset so it wins the depth test
+ * inside its overlap with the outer tier).
+ *
+ * @param {number} widthM    metres
+ * @param {number} heightM   metres
+ * @param {number} segs      segments per side
+ * @param {string} name      group child name (used by tests / debug)
+ * @param {number} lat       observer latitude (heightmap origin)
+ * @param {number} lon       observer longitude
+ * @param {boolean} polyOffset  true → push fragments toward camera in
+ *        depth buffer, so the inner tier wins over the outer in the
+ *        shared 0..radius_m region
+ */
+function buildMeshTier(widthM, heightM, segs, name, lat, lon, polyOffset) {
+  const geometry = new THREE.PlaneGeometry(widthM, heightM, segs, segs);
+  geometry.rotateX(-Math.PI / 2); // XY → XZ plane
+
+  const posAttr = geometry.attributes.position;
+  const count = posAttr.count;
+  const colors = new Float32Array(count * 3);
+  const col = new THREE.Color();
+
+  for (let i = 0; i < count; i++) {
+    const wx = posAttr.getX(i);
+    const wz = posAttr.getZ(i);
+    const { lon: pLon, lat: pLat } = TileMath.localToLonLat(wx, wz, lon, lat);
+    const h = HeightSampler.getHeightAt(pLat, pLon);
+    posAttr.setY(i, h);
+    elevationColor(h, col);
+    colors[i * 3] = col.r;
+    colors[i * 3 + 1] = col.g;
+    colors[i * 3 + 2] = col.b;
+  }
+
+  posAttr.needsUpdate = true;
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.computeVertexNormals();
+
+  const material = new THREE.MeshLambertMaterial({ vertexColors: true });
+  if (polyOffset) {
+    material.polygonOffset = true;
+    material.polygonOffsetFactor = -1;
+    material.polygonOffsetUnits = -1;
+  }
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.receiveShadow = true;
+  mesh.name = name;
+  return mesh;
+}

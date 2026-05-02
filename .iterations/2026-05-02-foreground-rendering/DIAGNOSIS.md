@@ -198,4 +198,94 @@ data is a separate quality knob.
 
 ---
 
-Stopping here. Awaiting user pick / redirect before implementing.
+## Implementation choices (option (b) confirmed by user)
+
+Two architectural questions answered before code lands:
+
+### Q1: camera-anchored or world-anchored mesh?
+
+**Decision: world-anchored, v1.** The inner mesh is centred at the
+chosen location (the same origin the outer mesh is centred at). The
+mesh is rebuilt only on `location:changed`, the same trigger the outer
+mesh already uses.
+
+Rationale:
+
+- The painter doesn't care either way — it consumes a static Snapshot,
+  and by the time the painter runs the camera has stopped moving. This
+  question only affects the 3D viewer's walk-mode UX.
+- The project's flow is *compose, then paint*. `RESOLUTION-LOG`-style
+  pattern from the ROADMAP Decision Log: walk mode is "easel-positioning
+  for the chosen scene," not free exploration. Composition typically
+  happens within tens of metres of where the user dropped the pin.
+- A 500 m inner-mesh radius covers more than three minutes of jogging
+  (`JOG_SPEED_MS = 4.0` from `src/config.js`), so for the realistic
+  composition-finding session the user never leaves the rich foreground.
+- World-anchored is cheaper: no per-frame re-tessellation, no DEM
+  resampling, no edge-stitching across moving boundaries. Each location
+  change rebuilds both meshes once; everything else is static.
+- If users routinely walk past 500 m, *that's* the signal to upgrade to
+  camera-anchored. We have no telemetry for that today (the
+  `walker:moved` event reports `distanceFromOriginM` to the UI but
+  nothing persists it), and the project deliberately doesn't collect
+  user telemetry.
+
+The cost of being wrong: foreground degrades to coarse mesh once the
+walker passes ~500 m from origin. Acceptable v1; documented in the
+walker UI as a known boundary if needed later. The walk-bounds soft
+clamp (`_walkBoundRadius`) already kicks in at the outer terrain edge
+(~15 km), so the inner-mesh boundary is well within the existing
+"you've left composition territory" zone.
+
+### Q2: shared mesh or painter-only mesh?
+
+**Decision: shared mesh.** Both the 3D viewer and the painter consume
+the same two-tier mesh.
+
+Rationale:
+
+- ~64 k extra vertices (256-segment inner mesh) on top of the existing
+  ~263 k-vertex outer mesh is a small fraction of WebGL's comfortable
+  budget for a static scene. Modern hardware draws millions of
+  triangles per frame; this is a few hundred thousand and updates only
+  on `location:changed`.
+- The painter doesn't directly walk mesh triangles — it consumes the
+  WebGL snapshot canvas as an image — so painter render time is
+  unchanged regardless of mesh density. (The brief's "painter render
+  time should be unchanged or barely slower" prediction expected
+  triangle iteration that doesn't actually happen; we verified with
+  the bisection probe.) The richer 3D foreground produces a richer
+  *source canvas*, which is exactly what the painter wants.
+- Splitting the meshes means maintaining two builders and two
+  HeightSampler conventions for no compelling reason.
+
+Fallback if profiling shows >5 % FPS regression in walk mode: drop
+the inner mesh from the 3D viewer and keep it only for the offscreen
+painter snapshot path (a `TerrainBuilder.buildPainterMesh()` variant
+that the snapshot capture uses). The implementation reserves room for
+this — the inner mesh is a separate `Mesh` added to the same `terrain`
+group, so disabling it for the live render is a one-line gate on
+`mesh.visible`.
+
+### Implementation outline
+
+- `TerrainBuilder.build()` adds a second `PlaneGeometry(1000, 1000,
+  256, 256)` (or 128 segments if profiling demands it) rotated to
+  the XZ plane, vertex-coloured by the same `elevationColor` ramp,
+  and added to the `terrain` group at the world origin. Vertices
+  sample `HeightSampler.getHeightAt()` at their lat/lon — same
+  source data the outer mesh uses.
+- Inner mesh material has `polygonOffset = true` /
+  `polygonOffsetFactor = -1` / `polygonOffsetUnits = -1` so it wins
+  the depth test against the outer mesh in their shared region.
+  No hole-cutting in the outer mesh required.
+- `HeightSampler` is unchanged. The inner mesh's vertex sampling at
+  ~3.9 m spacing oversamples the DEM (Terrarium tiles at zoom 12 are
+  ~30 m per cell in central Europe), so the inner mesh's surface is
+  the bilinear-interpolated DEM at finer triangulation — smooth, not
+  stepped. Verified visually in the post-implementation probe outputs.
+- No DATA-CONTRACTS change: the `viewpoint`, `groundY`, `cameraWorldY`,
+  and snapshot fields are unchanged. `HeightSampler` continues to
+  return the same Y at any (lat, lon).
+
+Implementing now.

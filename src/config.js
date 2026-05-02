@@ -44,6 +44,22 @@ export const OSM_TILE_SIZE_M = 1000;
 export const PHASE1_TERRAIN_CAP_M = 15000;
 export const TERRAIN_MESH_SEGMENTS = 512;
 
+// Inner concentric mesh — finer triangulation for the camera's first
+// 500 m so the foreground has real per-vertex DEM variation instead of
+// reading as a flat-coloured single-triangle trapezoid. World-anchored
+// to the chosen location; rebuilt only on location:changed. See
+// `.iterations/2026-05-02-foreground-rendering/DIAGNOSIS.md` for the
+// derivation.
+//
+// 256 segments over a 1 km × 1 km patch → vertex spacing ~3.9 m. Adds
+// ~66 k vertices on top of the outer mesh's ~263 k — within WebGL's
+// budget for a static scene.
+//
+// Set `TERRAIN_INNER_MESH_RADIUS_M = 0` to disable (regression-guard
+// path: the engine produces output identical to pre-fix coarse-mesh).
+export const TERRAIN_INNER_MESH_RADIUS_M = 500;
+export const TERRAIN_INNER_MESH_SEGMENTS = 256;
+
 export const SKY = {
   turbidity: 6,
   rayleigh: 2,
