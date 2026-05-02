@@ -1,11 +1,8 @@
 import { SceneManager } from '../scene/SceneManager.js';
 
-/**
- * Phase 1: screen-resolution PNG download.
- * Phase 4 will extend to A3 300 DPI with TiledRenderer.
- */
+/** Screen-resolution PNG download of the live WebGL canvas. */
 export const ExportPipeline = {
-  async export({ format, dpi, orientation }) {
+  async export() {
     const renderer = SceneManager.getRenderer();
     const canvas = renderer.domElement;
 
@@ -23,10 +20,5 @@ export const ExportPipeline = {
         resolve(blob);
       }, 'image/png');
     });
-  },
-
-  canRenderInOnePass({ width, height }) {
-    // Phase 1 always uses screen resolution — no GPU limit concerns
-    return true;
   },
 };

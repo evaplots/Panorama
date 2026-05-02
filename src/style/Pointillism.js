@@ -91,13 +91,9 @@ const DEFAULTS = {
   windInfluence: 0.0,       // 0..1 — when windDirectionDeg is set, how strongly it pulls
                             // strokes toward wind. Default 0; needs Weather module data.
 
-  // Palette options. Default: extract from source via median-cut (ColorThief equivalent).
-  //   palette: null            → extract from source (default)
-  //   palette: [[r,g,b], ...]  → use the given palette directly
-  //   (curated palettes from src/style/palettes.json must be loaded by the caller
-  //    and passed via this opt — the algorithm itself is palettes-agnostic)
-  palette: null,
-  paletteSize: 20,          // ColorThief k-value for source extraction
+  // Palette extracted from source via median-cut (ColorThief equivalent),
+  // then extended with saturation-boost + 2× hue-rotation copies.
+  paletteSize: 20,          // median-cut k-value
   extendPalette: true,      // apply saturation-boost + 2× hue-rotation extension
   paletteSatBoost: 20,      // saturation boost (HSL %) for extension
   paletteHueJitter: 20,     // hue rotation range (deg) for extension
@@ -206,15 +202,10 @@ export async function applyPointillism(sourceCanvas, opts = {}) {
   // sky pixels in earth colours. Underpainting + gradient still read from
   // the post-painter `srcData` returned by renderUnderpainting above, so
   // polygons still appear in the painted output.
-  let palette;
-  if (Array.isArray(o.palette) && o.palette.length > 0) {
-    palette = o.palette.map(c => [c[0], c[1], c[2]]);
-  } else {
-    const paletteSourceData = sourceCanvas
-      .getContext('2d', { willReadFrequently: true })
-      .getImageData(0, 0, width, height);
-    palette = extractPalette(paletteSourceData, o.paletteSize);
-  }
+  const paletteSourceData = sourceCanvas
+    .getContext('2d', { willReadFrequently: true })
+    .getImageData(0, 0, width, height);
+  let palette = extractPalette(paletteSourceData, o.paletteSize);
   if (o.extendPalette) {
     palette = extendPaletteFn(palette, o.paletteSatBoost, o.paletteHueJitter, rand);
   }
