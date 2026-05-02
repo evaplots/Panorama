@@ -1,5 +1,89 @@
 # Panorama — release notes
 
+## fix — Foreground-rectangle artefact in the no-Snapshot underpainting (2026-05-02)
+
+A desaturated greyish rectangle filled the lower 60 % of the
+underpainting preview whenever the panel rendered without a Snapshot —
+e.g. the very first frame after app boot, before the user has selected
+a location. The same artefact also looked like it was layered onto
+scenes that did have a Snapshot loaded; it wasn't, but the haze pass's
+default-tilt overlay reads close enough to the no-Snapshot rectangle
+that the two were easy to confuse.
+
+### Root cause
+
+`applyHaze` in `src/style/atmosphericPasses.js` had a deliberate
+"non-degenerate fallback" for the case where `projectionCtx` was null:
+when the projector couldn't compute a real horizon Y, the pass invented
+one at `H * 0.40` (roughly the painterly default) and proceeded to apply
+its phase-tinted gradient over the synthetic below-horizon strip. The
+rationale documented in the JSDoc was "keep the pass useful during
+early-app boot and node-side probes that don't construct a full
+viewpoint." In practice, the pass painted a desaturated greyish band
+over the lower 60 % of any canvas with no Snapshot — at `phase=day`
+that's `HAZE_TINT.day = [200, 215, 230]` over whatever WebGL frame had
+been drawn, with cosine-falloff alpha peaking at 0.5. That's the user's
+"foreground rectangle."
+
+The misdiagnosis trail (recorded for posterity): the artefact looked
+identical to what waterPainter could produce when fed a giant water
+polygon, so the brief originally pointed at PR #14. Polygon-level
+instrumentation in waterPainter showed water polygons projecting as
+1-pixel-tall slivers at the horizon for both the Chamonix and inland
+Saarland test locations — far too small to fill the foreground. The
+new evidence — *the rectangle is still there with no location, no
+Snapshot, no OSM data* — ruled out every water hypothesis and pointed
+straight at atmospherics. A pass-bisection probe confirmed: with
+`hazeStrength = 0`, the rectangle vanishes.
+
+### Fix
+
+Single-line behavioural change in `applyHaze`: when `projectionCtx` is
+null, return zeroed early instead of inventing a horizon. Atmospheric
+perspective is a function of scene depth; with no scene there is no
+perspective to model, so painting one is wrong, not "graceful." The
+JSDoc is updated to record what the previous fallback did and why it
+was removed, so the next person reading the code doesn't put it back.
+
+`applySunBloom` already short-circuited on null projection (it depends
+on the sun's *projected* screen position, not just its altitude), and
+`applyGrainAndGrade` is projection-independent by design — both passes
+needed no change.
+
+### Probes
+
+`scripts/no-snapshot-rectangle-probe.js` — five render variants on a
+flat-colour source canvas with `bindings: null`:
+
+```
+full               hazedPixels=      0 bloomFired=false hazeMs=    0
+no-haze            hazedPixels=      0 bloomFired=false hazeMs=    0
+no-bloom           hazedPixels=      0 bloomFired=false hazeMs=    0
+no-grain           hazedPixels=      0 bloomFired=false hazeMs=    0
+no-atmospherics    hazedPixels=      0 bloomFired=false hazeMs=    0
+```
+
+Pre-fix, `full` reported `hazedPixels = 91 680` (~56 % of a 480×340
+preview, exactly the below-fake-horizon area). Post-fix all variants
+report 0 hazed pixels — `full` is byte-equivalent to the source
+canvas plus grain, with no haze rectangle.
+
+`scripts/atmospheric-perf-probe.js haze` (with-Snapshot regression
+guard) still passes: alpine-vista vs urban-courtyard delta differential
+is 0.451, well above the 0.35 pass bar — haze with a real
+`projectionCtx` continues to do exactly what PR #15 designed it to do.
+
+### Files changed
+
+```
+src/style/atmosphericPasses.js              applyHaze: skip when projectionCtx is null
+RELEASE-NOTES.md                            this entry
+scripts/no-snapshot-rectangle-probe.js      new — regression guard
+.iterations/2026-05-02-no-snapshot/         new — five-variant bisection outputs
+```
+
+State schema unchanged. No new dependencies.
+
 ## V2 — Atmospheric depth (released 2026-05-01)
 
 Three painterly post-passes that turn the painting from "diagram" into
