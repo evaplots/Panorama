@@ -1,136 +1,88 @@
 # Panorama — release notes
 
-## fix — Two-tier terrain mesh, finer triangulation in the foreground (2026-05-02)
+## fix — Foreground-rectangle artefact in the no-Snapshot underpainting (2026-05-02)
 
-The live preview at any selected location used to show a soft tinted
-gradient band in the bottom 30–40 % of the canvas, between the terrain
-silhouette and the canvas bottom edge. At civil twilight the band read
-as "greyish-mauve"; at golden hour as warm peach over olive-green —
-same artefact, different phase tint. The bisection probe in
-`.iterations/2026-05-02-foreground-rendering/` (added in the prior
-investigation PR) traced it to a meshing issue: the terrain mesh has
-512 segments over a 30 km × 30 km extent (~58.6 m vertex spacing), and
-the camera sits inside one ~58.6 m × 58.6 m triangle pair. Everything
-from canvas-bottom (~3.5 m at default −5° tilt) out to the nearest
-mesh edge (~29 m) renders inside that one triangle as a flat-coloured
-trapezoid. The painter pipeline projects most OSM polygons to thin
-slivers at the horizon (because they're flat ground at distance), so
-the foreground gets little painter content. Haze tints the resulting
-geometrically-uniform foreground uniformly. The "soft gradient band" is
-the haze pass doing its job over a foreground that lacks the detail
-variation it's meant to act on.
+A desaturated greyish rectangle filled the lower 60 % of the
+underpainting preview whenever the panel rendered without a Snapshot —
+e.g. the very first frame after app boot, before the user has selected
+a location. The same artefact also looked like it was layered onto
+scenes that did have a Snapshot loaded; it wasn't, but the haze pass's
+default-tilt overlay reads close enough to the no-Snapshot rectangle
+that the two were easy to confuse.
 
 ### Root cause
 
-`TerrainBuilder` builds a single `PlaneGeometry` covering the full
-clamped radius (15 km cap) at a fixed segment count (512). At any
-realistic eye height + downward tilt, the foreground falls inside the
-single near-camera triangle pair — the mesh is geometrically uniform
-where the rendered scene needs the most detail.
+`applyHaze` in `src/style/atmosphericPasses.js` had a deliberate
+"non-degenerate fallback" for the case where `projectionCtx` was null:
+when the projector couldn't compute a real horizon Y, the pass invented
+one at `H * 0.40` (roughly the painterly default) and proceeded to apply
+its phase-tinted gradient over the synthetic below-horizon strip. The
+rationale documented in the JSDoc was "keep the pass useful during
+early-app boot and node-side probes that don't construct a full
+viewpoint." In practice, the pass painted a desaturated greyish band
+over the lower 60 % of any canvas with no Snapshot — at `phase=day`
+that's `HAZE_TINT.day = [200, 215, 230]` over whatever WebGL frame had
+been drawn, with cosine-falloff alpha peaking at 0.5. That's the user's
+"foreground rectangle."
+
+The misdiagnosis trail (recorded for posterity): the artefact looked
+identical to what waterPainter could produce when fed a giant water
+polygon, so the brief originally pointed at PR #14. Polygon-level
+instrumentation in waterPainter showed water polygons projecting as
+1-pixel-tall slivers at the horizon for both the Chamonix and inland
+Saarland test locations — far too small to fill the foreground. The
+new evidence — *the rectangle is still there with no location, no
+Snapshot, no OSM data* — ruled out every water hypothesis and pointed
+straight at atmospherics. A pass-bisection probe confirmed: with
+`hazeStrength = 0`, the rectangle vanishes.
 
 ### Fix
 
-Two-tier terrain mesh. Both tiers share the existing DEM heightmap and
-the existing `HeightSampler` so the surface stays continuous across
-the boundary.
+Single-line behavioural change in `applyHaze`: when `projectionCtx` is
+null, return zeroed early instead of inventing a horizon. Atmospheric
+perspective is a function of scene depth; with no scene there is no
+perspective to model, so painting one is wrong, not "graceful." The
+JSDoc is updated to record what the previous fallback did and why it
+was removed, so the next person reading the code doesn't put it back.
 
-1. **Outer mesh.** Unchanged: 30 km × 30 km, 512 segments, ~263 k
-   vertices, ~58.6 m spacing. Covers the visible vista from the inner
-   boundary out to the horizon.
-2. **Inner concentric mesh.** New: 1 km × 1 km centred on the chosen
-   location, 256 segments, ~66 k vertices, ~3.9 m spacing. Covers the
-   first ~500 m around the camera (the half-side; corners reach ~707 m).
-   World-anchored — built once per `location:changed`, same trigger
-   the outer mesh uses. Material uses `polygonOffset` so it wins the
-   depth test against the outer mesh in the overlapping region without
-   needing to cut a hole in the outer mesh; both tiers sample the same
-   heightmap so the surface itself is continuous.
-
-Total: ~329 k vertices, ~655 k triangles. +25 % on the outer-mesh
-vertex count, well within WebGL's static-scene budget.
-
-### Architectural choices, recorded for the next reader
-
-- **World-anchored, not camera-anchored.** The painter consumes a
-  static Snapshot and doesn't care; the question is only about
-  walk-mode UX. The project's flow is *compose, then paint*; users
-  rarely walk past the inner-mesh boundary. World-anchored is cheaper
-  (no per-frame re-tessellation, no edge-stitching across moving
-  boundaries) and matches the realistic session length. v1 trade-off:
-  walking past ~500 m degrades the foreground back to coarse mesh.
-  Documented in DIAGNOSIS.md; ROADMAP Decision Log entry recorded.
-- **Shared mesh, not painter-only.** Both the 3D viewer and the
-  painter use the two-tier mesh. The painter doesn't directly walk
-  triangles (it consumes the WebGL snapshot canvas as an image), so
-  painter render time is unchanged regardless of mesh density. The
-  3D viewer FPS regression is bounded by the +25 % vertex count on a
-  static scene (expected < 5 %). Fallback path if profiling later
-  shows regression: gate `mesh.visible` on the inner tier in the live
-  render and keep it on in the offscreen painter snapshot capture
-  path. Reserved for v2 if needed.
+`applySunBloom` already short-circuited on null projection (it depends
+on the sun's *projected* screen position, not just its altitude), and
+`applyGrainAndGrade` is projection-independent by design — both passes
+needed no change.
 
 ### Probes
 
-`scripts/terrain-mesh-density-probe.js` — structural sanity check that
-the inner tier lands within the 80 k-vertex budget and ≤ 5 m spacing:
+`scripts/no-snapshot-rectangle-probe.js` — five render variants on a
+flat-colour source canvas with `bindings: null`:
 
 ```
-outer: 30000m × 30000m, 512 segs → 263169 verts, 524288 tris, spacing 58.6m
-inner:  1000m × 1000m, 256 segs →  66049 verts, 131072 tris, spacing  3.9m
-combined: 329218 verts, 655360 tris
-inner overhead: +66049 verts (+25.1% on outer)
-PASS
+full               hazedPixels=      0 bloomFired=false hazeMs=    0
+no-haze            hazedPixels=      0 bloomFired=false hazeMs=    0
+no-bloom           hazedPixels=      0 bloomFired=false hazeMs=    0
+no-grain           hazedPixels=      0 bloomFired=false hazeMs=    0
+no-atmospherics    hazedPixels=      0 bloomFired=false hazeMs=    0
 ```
 
-`scripts/foreground-rendering-probe.js` — pre-existing bisection probe.
-Outputs are byte-identical pre/post the mesh change: the painter
-pipeline doesn't touch mesh triangles, only the WebGL snapshot
-canvas, so synthetic-source probes stay deterministic. Real-app
-verification (richer foreground in the live preview) is a manual
-browser test — the painter probes can't see the mesh because they
-run against a synthesised WebGL-like source.
+Pre-fix, `full` reported `hazedPixels = 91 680` (~56 % of a 480×340
+preview, exactly the below-fake-horizon area). Post-fix all variants
+report 0 hazed pixels — `full` is byte-equivalent to the source
+canvas plus grain, with no haze rectangle.
 
-`scripts/water-determinism-probe.js` and `scripts/water-perf-probe.js
-sun` and `scripts/atmospheric-perf-probe.js haze` — all PASS post-fix.
-
-### Manual verification checklist
-
-`npm run dev` and visit four scenes:
-
-- [ ] **Chamonix** at default time. Foreground (bottom 30 %) shows
-      recognisable ground texture (canopy stippling where forest exists,
-      ground-polygon colours where they exist, terrain shading where
-      neither does) — not a flat tinted gradient.
-- [ ] **Saarland** (the original bug-reveal scene, 49.41097, 7.12606,
-      bearing 270°). Same check.
-- [ ] **Mediterranean coast** (e.g. 43.6, 7.2 looking south). Water
-      polygons should now have real foreground area to fill, not just
-      the thin sliver at the horizon they had before.
-- [ ] **Yosemite** (e.g. 37.7459, −119.5332). No OSM ground polygons
-      available at most US locations; foreground should read as bare
-      painterly terrain (DEM elevation gradient + lighting), not as the
-      haze-mauve band.
-- [ ] **Walk-mode at Chamonix:** walk forward 100 m. Inner mesh is
-      world-anchored so it stays centred on the original location;
-      verify the foreground remains rich at the new position (still
-      well inside the 500 m boundary). Walking >500 m in any direction
-      degrades back to coarse mesh — expected, documented.
-- [ ] **3D-viewer FPS** at default Chamonix (DevTools performance):
-      regression < 5 % vs. main.
+`scripts/atmospheric-perf-probe.js haze` (with-Snapshot regression
+guard) still passes: alpine-vista vs urban-courtyard delta differential
+is 0.451, well above the 0.35 pass bar — haze with a real
+`projectionCtx` continues to do exactly what PR #15 designed it to do.
 
 ### Files changed
 
 ```
-src/terrain/TerrainBuilder.js               extract buildMeshTier helper, add inner mesh
-src/config.js                               +TERRAIN_INNER_MESH_RADIUS_M, +TERRAIN_INNER_MESH_SEGMENTS
+src/style/atmosphericPasses.js              applyHaze: skip when projectionCtx is null
 RELEASE-NOTES.md                            this entry
-ROADMAP.md                                  Decision Log entry recording the architectural choice
-scripts/terrain-mesh-density-probe.js       new — vertex / spacing structural sanity check
-.iterations/2026-05-02-foreground-rendering/DIAGNOSIS.md   updated with Q1 / Q2 answers
+scripts/no-snapshot-rectangle-probe.js      new — regression guard
+.iterations/2026-05-02-no-snapshot/         new — five-variant bisection outputs
 ```
 
-State schema unchanged. DATA-CONTRACTS unchanged (the mesh exposes no
-new fields to the painter). No new dependencies.
+State schema unchanged. No new dependencies.
 
 ## V2 — Atmospheric depth (released 2026-05-01)
 
