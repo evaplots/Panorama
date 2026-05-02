@@ -6,25 +6,13 @@ import { createDatePicker } from './DatePicker.js';
 import { createTimeSlider } from './TimeSlider.js';
 import { createModeToggle } from './ModeToggle.js';
 import { createDebugOverlay } from './DebugOverlay.js';
-import { createPalettePicker } from './PalettePicker.js';
 import { createWeatherPanel } from './WeatherPanel.js';
 import { createPainterParamsPanel } from './PainterParamsPanel.js';
 import { createOutputPanel } from './OutputPanel.js';
 import { createTerrainPanel } from './TerrainPanel.js';
 import { createUnderpaintingPreviewPanel } from './UnderpaintingPreviewPanel.js';
-import palettes from '../style/palettes.json';
-import { desaturatePalette } from '../style/algorithm.js';
 import { state } from '../state.js';
 import { buildSnapshot } from '../snapshot.js';
-
-function resolvePainterOpts() {
-  const painter = state.get('style.painter');
-  const source = state.get('style.paletteSource');
-  if (source === 'curated' && painter && palettes[painter]) {
-    return { palette: palettes[painter].colors };
-  }
-  return {}; // colorthief / 'auto' — let applyPointillism extract from source
-}
 
 export const ControlsPanel = {
   init(rootEl) {
@@ -36,7 +24,6 @@ export const ControlsPanel = {
     createMapPicker(sidebar);
     createLocationPicker(sidebar);
     createIconicViewGallery(sidebar);
-    createPalettePicker(sidebar);
     createWeatherPanel(sidebar);
     createPainterParamsPanel(sidebar);
     createPresetSelector(sidebar);
@@ -110,7 +97,7 @@ export const ControlsPanel = {
       exportBtn.disabled = true;
       exportBtn.textContent = 'Saving…';
       try {
-        await ExportPipeline.export({ format: 'screen', dpi: 96, orientation: 'landscape' });
+        await ExportPipeline.export();
       } catch (e) {
         console.error('Export failed', e);
       } finally {
@@ -160,25 +147,6 @@ export const ControlsPanel = {
           weatherOpts.brushOpacity = Math.max(0.55, Math.min(0.85, op));
         }
 
-        // Cloud cover → palette desaturation. Applied at the call site by
-        // mutating the curated-palette opt before the engine extends it.
-        // For 'auto' / ColorThief mode the engine extracts the palette
-        // internally and we cannot intercept post-extension without an
-        // engine change (the brief explicitly forbids that), so this
-        // binding only fires when a curated palette is selected at v0.
-        // Tracking issue for an engine hook lives in the curation backlog.
-        const painterOpts = resolvePainterOpts();
-        if (
-          Number.isFinite(wx?.cloudCover_pct) &&
-          Array.isArray(painterOpts.palette) &&
-          painterOpts.palette.length > 0
-        ) {
-          const factor = Math.min(0.5, wx.cloudCover_pct / 200);
-          if (factor > 0) {
-            painterOpts.palette = desaturatePalette(painterOpts.palette, factor);
-          }
-        }
-
         // V2 Step 5c — PainterParamsPanel surface, read at trigger time.
         // Defaults match the engine's own DEFAULTS so an untouched panel
         // reproduces the pre-step-5c painting.
@@ -214,16 +182,12 @@ export const ControlsPanel = {
           weatherOpts.windInfluence = p.windInfluenceOverride;
         }
 
-        // Spread order: palette source → painter sliders → weather data.
-        // weatherOpts last lets brushOpacity (precip) and brushStrokeFactor
-        // (wind speed) override the panel sliders; that matches the brief's
-        // call-site contract from PR #9 (data-driven beats user-configured
-        // for those two, except where the user overrode them). For
-        // brushOpacity / brushStrokeFactor we accept that the slider becomes
-        // a no-op when weather data is present — by design; the panel ships
-        // the parameter surface, the data surface stays in charge.
+        // Spread order: painter sliders → weather data. weatherOpts last
+        // lets brushOpacity (precip) and brushStrokeFactor (wind speed)
+        // override the panel sliders; data-driven beats user-configured
+        // for those two, except where the user overrode them. The panel
+        // ships the parameter surface, the data surface stays in charge.
         const { canvas: stylized, timing } = await applyPointillism(snap, {
-          ...painterOpts,
           ...painterParams,
           targetPaperSize,
           targetOrientation,

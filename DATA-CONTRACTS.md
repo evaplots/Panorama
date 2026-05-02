@@ -533,8 +533,6 @@ These bindings ship with the v0 pointillism prototype. They are deliberately min
 | Brushstroke angle           | `weather.wind.directionDeg` (Open-Meteo)   | `windDirectionDeg = directionDeg + 90` (strokes run *along* the wind)   |
 | Brushstroke length          | `weather.wind.speedMs`                     | `brushStrokeFactor = 1 + speedMs/10`; `windInfluence = speedMs > 1.5 ? 0.4 : 0` |
 | Brushstroke opacity         | `weather.precipitation_mmh`                | `brushOpacity = clamp(0.85 - precip/40, 0.55, 0.85)` — heavy rain softens strokes |
-| Palette desaturation        | `weather.cloudCover_pct`                   | `desaturatePalette(palette, min(0.5, cloudCover/200))` — overcast flattens toward grey. **Curated palettes only at v0** (auto/ColorThief mode would need a post-extension engine hook the brief explicitly forbids); deferred to a curation-phase PR. |
-| Palette                     | `palettes.json` curated set + `sun.phase`  | nearest curated palette by climate-zone × sun.phase enum                |
 
 ### Stroke-width as physical measurement (v1.1+)
 
@@ -551,20 +549,17 @@ brushThicknessPx = round(brushWidthMm × dpi / 25.4)
 
 Length still varies per stroke as `brushThicknessPx + brushThicknessPx × brushStrokeFactor × √magnitude` — only the width is fixed by physical measurement. Wind-bound stroke direction (when `windDirectionDeg` is set) is unaffected.
 
-### Palette: extracted-from-source vs curated (v1.1+)
+### Palette: extracted from source (v1.1+)
 
-The Style module's default behaviour is to **extract the palette from the rendered scene** via median-cut (a ColorThief-equivalent), then extend it via saturation-boost and 2× hue-rotation copies — matching `guillaume-gomez/to-pointillism`'s palette pipeline. Curated painter palettes (Munch, Kirchner, Soutine, Whistler, Turner, Marc, Nolde — see `src/style/palettes.json`) are **opt-in overrides**.
+The painter extracts the palette from the rendered scene via median-cut (a ColorThief-equivalent), then extends it via saturation-boost and 2× hue-rotation copies — matching `guillaume-gomez/to-pointillism`'s palette pipeline. (Curated painter palettes were an earlier opt-in override; that path was retired when the curation feature shipped.)
 
 | Field                | Default  | Notes                                                           |
 | -------------------- | -------- | --------------------------------------------------------------- |
-| `palette`            | `null`   | `null` → extract from source via median-cut; pass an array of `[r,g,b]` triples to override (curated).                            |
 | `paletteSize`        | `20`     | k-value for the median-cut extraction                           |
 | `extendPalette`      | `true`   | Apply saturation-boost + 2× hue-rotation extension (4× size)   |
 | `paletteSatBoost`    | `20`     | Saturation increase (HSL %) for the boosted copy               |
 | `paletteHueJitter`   | `20`     | Hue rotation range (deg) for the two random-hue copies         |
 | `paletteTemperature` | `28`     | Softmax temperature for weighted-random sampling per stroke    |
-
-Curated palettes can be invoked from a future palette-by-context routing layer (climate × sun.phase enum) once it exists, but that lookup is deliberately not the default — extracting the palette from the actual rendered scene preserves the per-image chromatic relationship the painter would have observed.
 
 ### Underpainting and gradient smoothing (v1.1+)
 

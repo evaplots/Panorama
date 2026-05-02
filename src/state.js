@@ -48,13 +48,6 @@ const _state = {
     dpi: 300,
     inProgress: false,
   },
-  style: {
-    // 'auto' is the ColorThief sentinel matching the Snapshot contract in
-    // STRATEGY-V2 §"The Snapshot". When painter === 'auto' the palette is
-    // extracted from the underpainting; otherwise it is a palettes.json slug.
-    painter: 'auto',
-    paletteSource: 'colorthief', // 'curated' | 'colorthief'
-  },
   // V2 Step 5: WeatherPanel overrides. Each field is null when the panel
   // input is empty (= use fetched value); a number when the user has typed
   // an override. mergeWeather() in src/weather/mergeWeather.js applies the

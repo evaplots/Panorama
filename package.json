@@ -7,12 +7,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "format": "prettier --write src/",
-    "test": "node scripts/test-stroke-scale.js",
-    "pointillism": "node scripts/pointillism-test.js",
-    "gallery": "node scripts/build-gallery.js",
-    "matrix": "node scripts/build-matrix-gallery.js",
-    "thumbnails": "node scripts/build-thumbnails.js",
-    "process-plates": "node scripts/build-process-plates.js"
+    "test": "node scripts/test-stroke-scale.js"
   },
   "dependencies": {
     "earcut": "^3.0.2",

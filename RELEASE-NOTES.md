@@ -1,5 +1,101 @@
 # Panorama — release notes
 
+## chore — Remove curated palettes + dead modules (2026-05-02)
+
+Curated painter palettes (Munch, Kirchner, Soutine, Whistler, Turner,
+Marc, Nolde) and the related UI / state / scripts retired. The painter
+now extracts the palette from the rendered scene via median-cut
+(ColorThief-equivalent), the only path that ever shipped enabled by
+default. Same pass swept stub modules and dead scripts.
+
+### Removed
+
+- `src/style/palettes.json` — curated palette JSON (~170 lines).
+- `src/ui/PalettePicker.js` — radio-list picker UI for the curated set.
+- `src/state.js` — `state.style.{painter, paletteSource}` block.
+- `src/style/algorithm.js` — `desaturatePalette()` (only call site was
+  the curated-palette cloud-cover binding in `ControlsPanel`).
+- `src/ui/ControlsPanel.js` — `resolvePainterOpts()`, the
+  `painters.json` import, the `desaturatePalette` import, the
+  cloud-cover-on-curated-palette binding block. `state.style.*` reads
+  removed; `ExportPipeline.export()` no-arg (was passing dead
+  `format/dpi/orientation`).
+- `src/style/Pointillism.js` — `palette: null` opt + the
+  pass-curated-array branch. The auto-extract path was always the
+  default; it's now the only path.
+- `src/style/index.js` — `StyleModule` facade (nothing imported it).
+- `src/style/categories.js` — `CATEGORIES` array export (nothing
+  imported it).
+- `scripts/pointillism-test.js`, `scripts/build-gallery.js`,
+  `scripts/build-matrix-gallery.js`, `scripts/build-process-plates.js`,
+  `scripts/build-thumbnails.js` — gallery / matrix / exhibition build
+  scripts that ran across the curated-palette set. With the palettes
+  gone these scripts have nothing to vary against.
+- `package.json` script entries: `pointillism`, `gallery`, `matrix`,
+  `thumbnails`, `process-plates`.
+- `src/astronomy/index.js`, `src/wildlife/index.js`,
+  `src/weather/index.js` — `{ status: 'stub' }` exports for phases
+  that never shipped. Nothing imported them. (`src/weather/`
+  `WeatherFetcher.js` and `mergeWeather.js` are real and stay.)
+- `src/export/TiledRenderer.js` — Phase-4 stub that throws on call.
+  Nothing imported it. The `Phase 4 will extend with TiledRenderer`
+  comment in `ExportPipeline.js` is gone too.
+- `docs/modules/astronomy.md`, `docs/modules/wildlife.md` — module
+  docs for the deleted stubs.
+
+### What still exists (and what changed inside it)
+
+- The painter pipeline is unchanged in behaviour. `applyPointillism`
+  still extracts a palette from the source canvas, extends it via
+  saturation-boost + 2× hue-rotation, samples weighted-randomly per
+  stroke. `paletteSize`, `paletteTemperature`, `paletteSatBoost`,
+  `paletteHueJitter`, `extendPalette` opts all kept — they tune the
+  one path that remains.
+- `PainterParamsPanel`'s "Palette diversity" and "Palette colours"
+  sliders still write to `state.painter.paletteTemperature` and
+  `state.painter.paletteSize`. They tune the auto-extracted palette.
+- `DATA-CONTRACTS.md` updated: the "Palette: extracted-from-source vs
+  curated" section is now "Palette: extracted from source"; the
+  palette-desaturation v0 binding row removed; the `palette: null`
+  field removed from the engine opts table. Nothing else in the
+  contract changes.
+
+### Verification
+
+- `npm run build` passes.
+- `npm test` (test-stroke-scale) passes — 6/6.
+- `node --check` clean across all touched files.
+- `grep -r 'desaturatePalette|TiledRenderer|AstronomyModule|WildlifeModule|WeatherModule|state\.style|palettes\.json|PalettePicker'` returns nothing in `src/` and `scripts/`.
+
+### Files
+
+```
+deleted:
+  src/style/palettes.json
+  src/ui/PalettePicker.js
+  src/astronomy/index.js
+  src/wildlife/index.js
+  src/weather/index.js
+  src/export/TiledRenderer.js
+  scripts/{pointillism-test,build-gallery,build-matrix-gallery,build-process-plates,build-thumbnails}.js
+  docs/modules/{astronomy,wildlife}.md
+
+modified:
+  src/ui/ControlsPanel.js          -palette wiring, -resolvePainterOpts, -ExportPipeline opts
+  src/state.js                     -style.{painter,paletteSource}
+  src/style/Pointillism.js         -palette opt, simplify auto-extract path
+  src/style/algorithm.js           -desaturatePalette
+  src/style/index.js               -StyleModule, -computeEffectiveDpi reexport
+  src/style/categories.js          -CATEGORIES export
+  src/export/ExportPipeline.js     -unused opts, -TiledRenderer comment
+  package.json                     -5 dead npm script entries
+  DATA-CONTRACTS.md                -palette desaturation v0 binding, -curated palette section
+```
+
+State schema unchanged in shape (the `painter` block is the same; the
+deleted block was `style: { painter, paletteSource }`). No new
+dependencies, none removed.
+
 ## V2 — Atmospheric depth (released 2026-05-01)
 
 Three painterly post-passes that turn the painting from "diagram" into
