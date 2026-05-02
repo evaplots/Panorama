@@ -1,0 +1,98 @@
+# saarland — per-row topmost-paint-owner table (7 columns × full canvas)
+# horizon line for elevation=-5°: y ≈ 134.
+
+y    | 14 px |  82 px | 150 px | 240 px | 330 px | 398 px | 466 px
+---- | ----- | ------ | ------ | ------ | ------ | ------ | ------
+   0 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+   4 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+   8 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  12 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  16 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  20 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  24 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  28 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  32 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  36 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  40 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  44 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  48 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  52 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  56 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  60 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  64 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  68 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  72 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  76 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  80 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  84 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  88 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  92 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+  96 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+ 100 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+ 104 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+ 108 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+ 112 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+ 116 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+ 120 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+ 124 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+ 128 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+ 132 | NONE| NONE| NONE| NONE| NONE| NONE| NONE
+ 136 |  f/mea|  f/mea|  f/mea|  f/mea|  f/mea|  f/far|  f/far
+ 140 |  f/mea|  f/mea|  f/mea|  f/far|  f/far|  f/far|  f/far
+ 144 |  f/mea|  f/mea|  f/far|  f/far|  f/far|  f/far|  f/far
+ 148 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 152 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 156 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 160 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 164 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 168 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 172 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 176 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 180 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 184 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 188 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 192 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 196 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 200 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 204 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 208 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 212 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 216 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 220 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 224 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 228 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 232 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 236 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 240 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 244 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 248 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 252 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 256 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 260 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 264 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 268 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 272 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 276 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 280 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 284 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 288 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 292 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 296 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 300 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 304 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 308 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 312 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 316 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 320 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 324 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 328 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 332 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+ 336 |  f/far|  f/far|  f/far|  f/far|  f/far|  f/far|  f/far
+
+* = pixel is contained by a forest polygon but the topmost paint owner is not forest (forest is shadowed by a smaller, later-drawn polygon).
+
+summary across full-canvas samples:
+  total samples       : 595
+  NO-OWNER (sky)      : 238 (40.0%)
+  topmost farmland    : 357 (60.0%)
+  shadowed forest     : 0 (0.0%) — pixels where a forest polygon is under but masked by a smaller later-drawn polygon
