@@ -1,5 +1,60 @@
 # Panorama — release notes
 
+## feat — Map pegman follows the 3D camera (2026-05-02)
+
+The map's pin and bearing arrow now update live as the user moves and
+orbits in the 3D scene. Previously the map → 3D direction worked
+(click a pin, set bearing, hit "View in 3D") but the reverse didn't —
+once you were in the 3D view, walking forward or orbiting the camera
+left the map showing the original drop point.
+
+Now:
+
+- **Orbit** (mouse drag in 3D viewer) → bearing arrow on the map
+  rotates to match the camera azimuth. FOV slider + readout sync to
+  the wheel-zoom.
+- **Walk mode** (WASD) → the pin moves to follow the walker's
+  position, computed from the scene-origin lat/lon plus the walker's
+  world-XZ offset. The map is NOT auto-recentred — the user can pan
+  if they want; auto-pan would fight any deliberate pan they've
+  already done.
+- **Walker reset / mode switch** → walker anchor returns to (0, 0),
+  pin snaps back to scene origin.
+
+### What this changes
+
+- `src/ui/MapPicker.js` — adds an `anchorToLatLon` helper (mirrors
+  `HeightSampler.getHeightAtWorld`'s coordinate frame so the pin
+  lands exactly under the walker, sub-metre), subscribes to
+  `viewpoint:changed`, and applies the update via rAF batching (camera
+  drag fires dozens of events/sec; we only need one map update per
+  frame).
+- New `pinReflectsCamera` flag distinguishes two states: the pin
+  *follows the camera* (after a committed location, default), or the
+  pin reflects an *uncommitted user click* on the map (proposed
+  scene, doesn't get snapped back when the user orbits the still-old
+  3D scene). Click → `false`. `location:changed` (commit or search) →
+  `true`.
+
+### What this does NOT change
+
+The map → 3D direction is unchanged. Drop a pin, drag bearing, click
+"View in 3D" — same flow as before.
+
+The FOV slider on the map still doesn't `state.set` on input — it
+only commits on "View in 3D" click. So changing the slider mid-flight
+doesn't immediately zoom the 3D viewer; the wheel in the 3D viewer
+is the live FOV control.
+
+### Files changed
+
+```
+src/ui/MapPicker.js     +viewpoint:changed sync, +pinReflectsCamera flag
+RELEASE-NOTES.md        this entry
+```
+
+State schema unchanged. DATA-CONTRACTS unchanged. No new dependencies.
+
 ## V2 — Atmospheric depth (released 2026-05-01)
 
 Three painterly post-passes that turn the painting from "diagram" into

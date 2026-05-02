@@ -12,6 +12,26 @@ const EARTH_R = 6371000;
 const D2R = Math.PI / 180;
 const R2D = 180 / Math.PI;
 
+// Earth radius matching `src/terrain/HeightSampler.js` and
+// `src/style/projection.js` so the map's world-XZ → lat/lon conversion
+// stays consistent with the 3D viewer's coordinate frame. (TileMath
+// uses 6378137; we use the same here to avoid sub-metre drift between
+// where the walker is in the 3D scene and where the pin is on the
+// map.) The cone math above uses 6371000 (mean Earth radius) for
+// great-circle distance — that's a few-km display estimate, separate
+// from the metres-precise walker offset.
+const TERRAIN_EARTH_R = 6378137;
+
+// Convert a walker's world-XZ offset (relative to the chosen scene
+// origin's lat/lon) back into a lat/lon. Mirrors the inverse of
+// TileMath.lonLatToLocal that TerrainBuilder / HeightSampler use to
+// place mesh vertices, so the pin lands exactly under the walker.
+function anchorToLatLon(originLat, originLon, anchorX, anchorZ) {
+  const dLat = -anchorZ / TERRAIN_EARTH_R * R2D;
+  const dLon = anchorX / (TERRAIN_EARTH_R * Math.cos(originLat * D2R)) * R2D;
+  return { lat: originLat + dLat, lon: originLon + dLon };
+}
+
 /**
  * Walk a great-circle distance from (lat, lon) along bearingDeg (deg from N, clockwise).
  * Sufficiently accurate for the few-km cone radii used here.
@@ -170,6 +190,11 @@ export function createMapPicker(container) {
   function placePin(lat, lon) {
     local.lat = lat;
     local.lon = lon;
+    // User dropped a pin at a *proposed* location — it isn't committed
+    // until they hit "View in 3D" (or LocationPicker search fires
+    // location:changed). Until then, the 3D camera shouldn't pull the
+    // pin back to scene origin.
+    pinReflectsCamera = false;
     if (pinMarker) {
       pinMarker.setLatLng([lat, lon]);
     } else {
@@ -179,6 +204,7 @@ export function createMapPicker(container) {
           const ll = e.target.getLatLng();
           local.lat = ll.lat;
           local.lon = ll.lng;
+          pinReflectsCamera = false;
           redrawCone();
           updateReadout();
         });
@@ -207,14 +233,117 @@ export function createMapPicker(container) {
     });
   });
 
-  // External location updates (e.g., LocationPicker search) sync the map.
+  // Tracks the SCENE-ORIGIN lat/lon — the location the user dropped the
+  // pin at AND committed via "View in 3D" (or via LocationPicker search).
+  // The walker's `anchor` is offset from this origin in world XZ metres;
+  // we convert it back to lat/lon to drive the pin position when the
+  // user walks in the 3D viewer.
+  let sceneOriginLat = initialLoc?.lat ?? null;
+  let sceneOriginLon = initialLoc?.lon ?? null;
+
+  // When `pinReflectsCamera` is true, the pin tracks the 3D camera —
+  // it moves as the walker walks and snaps back to scene origin on
+  // walker reset. When false, the pin reflects an uncommitted user
+  // click on the map (proposed scene) and ignores the 3D camera. The
+  // flag flips to `false` on user-driven `placePin` (map click) and
+  // back to `true` on `location:changed` (commit / search).
+  let pinReflectsCamera = initialLoc != null;
+
+  // External location updates (e.g., LocationPicker search, "View in 3D"
+  // button commit) re-anchor the scene and put the pin back into
+  // camera-follower mode.
   const onLocationChanged = loc => {
     if (!loc || loc.lat == null) return;
+    sceneOriginLat = loc.lat;
+    sceneOriginLon = loc.lon;
+    pinReflectsCamera = true;
     if (local.lat === loc.lat && local.lon === loc.lon) return;
     placePin(loc.lat, loc.lon);
+    pinReflectsCamera = true;     // placePin sets it false; restore here
     map.setView([loc.lat, loc.lon], Math.max(map.getZoom(), 11));
   };
   state.on('location:changed', onLocationChanged);
+
+  // 3D viewer → map sync. Fires on every camera azimuth/elevation/FOV
+  // change (orbit drag, walk-mode mouse-look, wheel zoom) and on every
+  // walker step (anchor xz changes). We update the bearing arrow and
+  // FOV cone live; the pin moves in walk mode as the walker drifts
+  // away from the scene origin. We deliberately do NOT re-centre the
+  // map — the user can pan if they want; auto-following the walker
+  // would fight any pan they've done.
+  let lastViewpointVersion = 0;
+  function applyViewpointToMap(vp) {
+    if (!vp) return;
+    let changed = false;
+
+    if (typeof vp.azimuth === 'number' && vp.azimuth !== local.azimuthDeg) {
+      local.azimuthDeg = vp.azimuth;
+      changed = true;
+    }
+    if (typeof vp.fov === 'number' && Math.abs(vp.fov - local.fovDeg) > 0.5) {
+      local.fovDeg = vp.fov;
+      // Sync the FOV slider + readout so the UI reflects the wheel-zoom.
+      const rounded = Math.round(vp.fov);
+      if (parseInt(fovSlider.value, 10) !== rounded) fovSlider.value = String(rounded);
+      fovReadout.textContent = `${rounded}°`;
+      changed = true;
+    }
+
+    // Camera-follower mode: pin tracks the 3D camera/walker. In orbit
+    // mode the anchor is always (0, 0) so the pin sits at scene origin;
+    // in walk mode the anchor offset moves the pin to where the walker
+    // is. When `pinReflectsCamera` is false (user clicked an
+    // uncommitted location on the map), this branch skips so we don't
+    // snap the pin away from the click.
+    if (pinReflectsCamera && vp.anchor && sceneOriginLat != null && sceneOriginLon != null) {
+      const { lat, lon } = anchorToLatLon(
+        sceneOriginLat, sceneOriginLon,
+        vp.anchor.x ?? 0, vp.anchor.z ?? 0,
+      );
+      // Small tolerance so floating-point drift on a near-stationary
+      // walker doesn't redraw every frame.
+      if (Math.abs(lat - local.lat) > 1e-7 || Math.abs(lon - local.lon) > 1e-7) {
+        local.lat = lat;
+        local.lon = lon;
+        if (pinMarker) pinMarker.setLatLng([lat, lon]);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      redrawCone();
+      updateReadout();
+    }
+  }
+
+  // Throttle viewpoint:changed via rAF batching. Camera orbit drag fires
+  // dozens of events per second; we only need at most one map update
+  // per frame.
+  let pendingViewpoint = null;
+  let rafScheduled = false;
+  const onViewpointChanged = vp => {
+    pendingViewpoint = vp;
+    if (rafScheduled) return;
+    rafScheduled = true;
+    requestAnimationFrame(() => {
+      rafScheduled = false;
+      const v = pendingViewpoint;
+      pendingViewpoint = null;
+      applyViewpointToMap(v);
+      lastViewpointVersion++;
+    });
+  };
+  state.on('viewpoint:changed', onViewpointChanged);
+
+  // Apply the current state once on mount so the bearing arrow lines up
+  // before the first viewpoint:changed event fires (which only fires when
+  // the user actually moves the camera).
+  const initialVp = {
+    azimuth: state.get('viewpoint.azimuth'),
+    fov: state.get('viewpoint.fov'),
+    anchor: state.get('viewpoint.anchor') ?? { x: 0, z: 0 },
+  };
+  applyViewpointToMap(initialVp);
 
   // Leaflet needs a size invalidation after the container becomes visible
   // (sidebar mounts inside a fixed-position parent; first render can mis-size).
@@ -227,6 +356,7 @@ export function createMapPicker(container) {
 
   return () => {
     state.off('location:changed', onLocationChanged);
+    state.off('viewpoint:changed', onViewpointChanged);
     map.remove();
     container.removeChild(root);
   };
