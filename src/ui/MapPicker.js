@@ -182,11 +182,18 @@ export function createMapPicker(container) {
         .on('drag', e => {
           const ll = e.target.getLatLng();
           local.azimuthDeg = bearingFromTo(local.lat, local.lon, ll.lat, ll.lng);
-          // Live-rotate the 3D camera. Cheap (no rebuild), so we drive it
-          // every drag tick. The viewpoint:changed echo from CameraController
-          // hits applyViewpointToMap below but local.azimuthDeg already
-          // matches the event so the diff-guard there is a no-op — no loop.
-          CameraController.lookAt(local.azimuthDeg, state.get('viewpoint.elevation') ?? -5);
+          // Live-rotate the 3D camera. Read elevation from the camera
+          // itself, NOT from state.viewpoint.elevation — the camera's
+          // internal _elevation is updated on orbit drag / mouse-look but
+          // never written back to state, so state.viewpoint.elevation is
+          // stale (always its initial DEFAULT_TILT_DEG = -5). Using the
+          // stale state value reset the camera's pitch on every bearing
+          // drag, making the camera snap and feel like the bearing wasn't
+          // working at all. The viewpoint:changed echo hits
+          // applyViewpointToMap below but local.azimuthDeg already
+          // matches, so the diff-guard there short-circuits — no loop.
+          const currentElevation = CameraController.getViewpoint().elevation;
+          CameraController.lookAt(local.azimuthDeg, currentElevation);
           state.set('viewpoint.azimuth', local.azimuthDeg);
           redrawCone();
           updateReadout();
