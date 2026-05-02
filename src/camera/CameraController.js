@@ -15,6 +15,7 @@ let camera, canvasEl;
 let _azimuth = 270;
 let _elevation = DEFAULT_TILT_DEG;
 let _fovH = DEFAULT_FOV_DEG;
+let _eyeHeight = EYE_HEIGHT_M;
 let _mode = 'orbit';
 let _walkBoundRadius = Infinity;
 
@@ -40,7 +41,7 @@ function fovHToV(hFov, aspect) {
 function emitViewpointChanged() {
   state.emit('viewpoint:changed', {
     location: state.get('location'),
-    eyeHeight: EYE_HEIGHT_M,
+    eyeHeight: _eyeHeight,
     azimuth: _azimuth,
     elevation: _elevation,
     fov: _fovH,
@@ -241,11 +242,11 @@ function doModeSwitch(mode) {
 
 function snapCameraToLocation() {
   const loc = state.get('location');
-  if (!loc) { camera.position.set(0, EYE_HEIGHT_M, 0); return; }
+  if (!loc) { camera.position.set(0, _eyeHeight, 0); return; }
   const groundY = HeightSampler.isReady()
     ? HeightSampler.getHeightAt(loc.lat, loc.lon)
     : 0;
-  camera.position.set(0, groundY + EYE_HEIGHT_M, 0);
+  camera.position.set(0, groundY + _eyeHeight, 0);
 }
 
 function updateWalk(dt) {
@@ -294,7 +295,7 @@ function updateWalk(dt) {
   const groundY = HeightSampler.isReady()
     ? HeightSampler.getHeightAtWorld(walkState.anchorX, walkState.anchorZ)
     : 0;
-  const targetY = groundY + EYE_HEIGHT_M;
+  const targetY = groundY + _eyeHeight;
 
   // Smooth Y over ~WALK_Y_SMOOTHING_MS so cliff edges don't pop the camera
   if (walkState.smoothedY === null) walkState.smoothedY = targetY;
@@ -317,7 +318,7 @@ export const CameraController = {
     canvasEl = canvas;
     const aspect = canvas.clientWidth / canvas.clientHeight || 16 / 9;
     camera = new THREE.PerspectiveCamera(fovHToV(_fovH, aspect), aspect, 0.1, 200000);
-    camera.position.set(0, EYE_HEIGHT_M, 0);
+    camera.position.set(0, _eyeHeight, 0);
     applyLookAt();
 
     setupOrbitDrag();
@@ -355,6 +356,29 @@ export const CameraController = {
     camera.fov = fovHToV(_fovH, aspect);
     camera.updateProjectionMatrix();
     emitViewpointChanged();
+  },
+
+  /**
+   * Update eye height in metres above ground. Repositions the camera
+   * immediately at the new height (orbit mode) or feeds into the smoothed
+   * walk-mode Y on the next frame. Reads ground Y from HeightSampler
+   * under the camera's current XZ so high cliffs / valleys don't lurch.
+   */
+  setEyeHeight(meters) {
+    _eyeHeight = Math.max(0.1, Math.min(100, meters));
+    if (!camera) return;
+    if (_mode === 'walk') {
+      // Walk mode: updateWalk() reads _eyeHeight every frame for the
+      // target Y, smoothed over WALK_Y_SMOOTHING_MS. Just emit so the
+      // map / preview re-render with the new height in their viewpoint.
+      emitViewpointChanged();
+      return;
+    }
+    const groundY = HeightSampler.isReady() && state.get('location')
+      ? HeightSampler.getHeightAtWorld(camera.position.x, camera.position.z)
+      : 0;
+    camera.position.y = groundY + _eyeHeight;
+    applyLookAt();
   },
 
   /** Phase 2: switch between orbit and walk modes (programmatic entry point). */
@@ -404,7 +428,7 @@ export const CameraController = {
   getViewpoint() {
     return {
       location: state.get('location'),
-      eyeHeight: EYE_HEIGHT_M,
+      eyeHeight: _eyeHeight,
       azimuth: _azimuth,
       elevation: _elevation,
       fov: _fovH,

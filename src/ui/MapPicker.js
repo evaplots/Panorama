@@ -2,12 +2,15 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { state } from '../state.js';
 import { CameraController } from '../camera/CameraController.js';
-import { DEFAULT_FOV_DEG } from '../config.js';
+import { DEFAULT_FOV_DEG, EYE_HEIGHT_M } from '../config.js';
 
 const CONE_RADIUS_M = 2000;
 const CONE_ARC_SAMPLES = 32;
 const FOV_MIN = 30;
 const FOV_MAX = 120;
+const EYE_HEIGHT_MIN = 0.5;
+const EYE_HEIGHT_MAX = 10.0;
+const EYE_HEIGHT_STEP = 0.1;
 
 const EARTH_R = 6371000;
 const D2R = Math.PI / 180;
@@ -102,6 +105,12 @@ export function createMapPicker(container) {
         <span class="pano-fov-readout">${DEFAULT_FOV_DEG}°</span>
       </label>
     </div>
+    <div class="pano-fov-row">
+      <label>Eye height
+        <input type="range" class="pano-eye-slider" min="${EYE_HEIGHT_MIN}" max="${EYE_HEIGHT_MAX}" step="${EYE_HEIGHT_STEP}" value="${EYE_HEIGHT_M}" />
+        <span class="pano-eye-readout">${EYE_HEIGHT_M.toFixed(1)} m</span>
+      </label>
+    </div>
     <button class="pano-view-btn" type="button" disabled>View in 3D</button>
   `;
   container.appendChild(root);
@@ -110,6 +119,8 @@ export function createMapPicker(container) {
   const readoutEl = root.querySelector('.pano-map-readout');
   const fovSlider = root.querySelector('.pano-fov-slider');
   const fovReadout = root.querySelector('.pano-fov-readout');
+  const eyeSlider = root.querySelector('.pano-eye-slider');
+  const eyeReadout = root.querySelector('.pano-eye-readout');
   const viewBtn = root.querySelector('.pano-view-btn');
 
   const map = L.map(mapEl, {
@@ -268,6 +279,18 @@ export function createMapPicker(container) {
     updateReadout();
   });
 
+  eyeSlider.addEventListener('input', () => {
+    const meters = parseFloat(eyeSlider.value);
+    eyeReadout.textContent = `${meters.toFixed(1)} m`;
+    // Live-update the camera height. setEyeHeight reads ground Y under
+    // the camera's current XZ so a tall eye height in a valley doesn't
+    // clip the camera into a cliff face. State write keeps snapshot.js
+    // and the painter pipeline reading the user's chosen height at
+    // export time.
+    CameraController.setEyeHeight(meters);
+    state.set('viewpoint.eyeHeight', meters);
+  });
+
   viewBtn.addEventListener('click', commitLocation);
 
   // Tracks the SCENE-ORIGIN lat/lon — the location the user dropped the
@@ -324,6 +347,13 @@ export function createMapPicker(container) {
       if (parseInt(fovSlider.value, 10) !== rounded) fovSlider.value = String(rounded);
       fovReadout.textContent = `${rounded}°`;
       changed = true;
+    }
+    if (typeof vp.eyeHeight === 'number') {
+      const current = parseFloat(eyeSlider.value);
+      if (Math.abs(vp.eyeHeight - current) > 0.05) {
+        eyeSlider.value = String(vp.eyeHeight.toFixed(1));
+        eyeReadout.textContent = `${vp.eyeHeight.toFixed(1)} m`;
+      }
     }
 
     // Camera-follower mode: pin tracks the 3D camera/walker. In orbit
