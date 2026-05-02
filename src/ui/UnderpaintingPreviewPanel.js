@@ -1,35 +1,41 @@
-// Live underpainting preview — a fast, interactive view of everything the
-// painter does BEFORE the pointillism stroke pass. Re-renders on relevant
-// state changes (camera orbit, painter sliders, time slider, etc.) so
-// curation has a sub-200 ms feedback loop instead of a 22 s full paint.
+// 3D-scene preview — shows the live WebGL canvas, cropped to the chosen
+// export aspect ratio. No painter overlays, no haze, no abstract
+// landmark silhouettes; what you see in the preview is exactly what the
+// 3D viewer is rendering, downsampled to the panel size.
 //
 // Mounting model:
-//   - Floats over the 3D viewer canvas, anchored bottom-right
+//   - Floats over the 3D viewer canvas, anchored bottom-right.
 //   - Aspect ratio tracks export.format / export.orientation, capped to
-//     480 × 340 (the larger dim hits 480 in landscape, the larger dim hits
-//     340 in portrait; smaller dim scales proportionally)
-//   - Closeable; the toggle in ControlsPanel mounts/unmounts the panel
+//     480 × 340 (longer dim hits 480 in landscape, longer dim hits 340
+//     in portrait; shorter dim scales proportionally).
+//   - Closeable; the toggle in ControlsPanel mounts/unmounts the panel.
 //
 // Re-render trigger model:
 //   - Camera updates (viewpoint:changed) are debounced ~100 ms — orbiting
 //     produces dozens of events per second, we don't want a render queue
-//     pile-up
+//     pile-up.
 //   - Other events render immediately — they fire less frequently and
-//     immediate feedback is the point
+//     immediate feedback is the point.
 //   - Token-counter cancellation: every render request takes a token; if
 //     a newer request lands before this one resolves, the result is
 //     discarded. Mirrors the SceneManager rebuild pattern.
 //
 // What this is NOT:
 //   - Not the export. There is no "Save image" path here; that stays in
-//     ControlsPanel's Test pointillism / Save image buttons.
-//   - Not the full painting. The pointillism stroke pass is deliberately
-//     skipped (it's the slow step). The preview shows what pointillism
-//     would START FROM, not what it would end up as.
+//     ControlsPanel's Test pointillism / Save image buttons. The painter
+//     pipeline still runs at export time — this panel just doesn't
+//     preview it.
+//   - Not the painter underpainting. Earlier versions of this panel
+//     drove a sub-50 ms painter render so curators could see how each
+//     slider affected the painting. That preview turned out to add
+//     visual content (abstract building silhouettes, haze tinting,
+//     polygon overpaint) that didn't match the actual 3D scene the
+//     user composed against, so the painter pipeline was removed from
+//     the preview path. The panel is now a 3D-scene mirror at the
+//     export aspect ratio. (Composition, scale, and crop preview;
+//     the painterly look is a one-shot transform applied at export.)
 
 import { state } from '../state.js';
-import { buildSnapshot } from '../snapshot.js';
-import { renderUnderpainting } from '../style/underpainting.js';
 
 // Panel sizing: bound the LONGER edge to 480 px, shorter scales to maintain
 // aspect ratio. A3 landscape (420×297) → 480×340; A3 portrait (297×420) →
@@ -82,28 +88,20 @@ function debounce(fn, delayMs) {
   return debounced;
 }
 
-// Capture the live WebGL canvas downsampled to the preview's working size.
-// Returns a fresh 2D canvas the painter can take ownership of. If the
-// WebGL canvas isn't mounted yet (very early app boot), returns a flat
-// midtone canvas so renderUnderpainting still has something valid to paint
-// onto.
-function captureWebglAt(width, height) {
-  const out = document.createElement('canvas');
-  out.width = width;
-  out.height = height;
-  const ctx = out.getContext('2d');
+// Blit the live WebGL canvas onto the panel canvas, scaled to the panel
+// size. Returns the timing in ms (used for the stat readout). If the
+// WebGL canvas isn't mounted yet (very early app boot), leaves the panel
+// canvas blank — there's nothing meaningful to mirror.
+function drawWebglOnto(targetCanvas) {
+  const t0 = performance.now();
+  const ctx = targetCanvas.getContext('2d');
+  ctx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
 
   const webgl = document.getElementById('panorama-canvas');
   if (webgl && webgl.width > 0 && webgl.height > 0) {
-    ctx.drawImage(webgl, 0, 0, width, height);
-  } else {
-    // Pre-mount fallback: midtone fill so the painter has a non-degenerate
-    // input. The user only sees this for the brief window before the first
-    // 3D frame is ready.
-    ctx.fillStyle = '#5a6478';
-    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(webgl, 0, 0, targetCanvas.width, targetCanvas.height);
   }
-  return out;
+  return Math.round(performance.now() - t0);
 }
 
 /**
@@ -124,27 +122,19 @@ export function createUnderpaintingPreviewPanel(rootEl, opts = {}) {
   panel.className = 'pano-preview-panel';
   panel.innerHTML = `
     <div class="pano-preview-header">
-      <span class="pano-preview-title">Preview — composition only</span>
+      <span class="pano-preview-title">Preview — 3D scene at export aspect</span>
       <button class="pano-preview-close" type="button" title="Hide preview" aria-label="Hide preview">×</button>
     </div>
     <canvas class="pano-preview-canvas"></canvas>
     <div class="pano-preview-footer">
-      <label class="pano-preview-soften">
-        <input type="checkbox" class="pano-preview-soften-input" />
-        <span>Soften edges</span>
-      </label>
-      <span class="pano-preview-stat" title="Last underpainting render time">— ms</span>
+      <span class="pano-preview-stat" title="Last frame mirror time">— ms</span>
     </div>
   `;
   rootEl.appendChild(panel);
 
   const canvas = panel.querySelector('.pano-preview-canvas');
   const stat = panel.querySelector('.pano-preview-stat');
-  const softenInput = panel.querySelector('.pano-preview-soften-input');
   const closeBtn = panel.querySelector('.pano-preview-close');
-
-  let softenEdges = true;
-  softenInput.checked = softenEdges;
 
   // ── Sizing: track export.format/orientation ────────────────────────────
   function applyDimensions() {
@@ -161,84 +151,16 @@ export function createUnderpaintingPreviewPanel(rootEl, opts = {}) {
   applyDimensions();
 
   // ── Render core ────────────────────────────────────────────────────────
-  // Token-counter cancellation: every render bumps `renderToken`; if a
-  // newer render starts while an older one is mid-async, the older
-  // discards its result silently.
-  let renderToken = 0;
+  // Pure synchronous mirror of the 3D viewer's WebGL canvas onto the
+  // panel canvas at the panel's export-aspect dimensions. No painter
+  // pipeline, no async snapshot build, no token-counter cancellation
+  // needed — `drawImage` is the whole pass.
 
-  async function renderNow() {
-    const myToken = ++renderToken;
-    const t0 = performance.now();
-
+  function renderNow() {
     applyDimensions();
-
-    const snapshot = await buildSnapshot();
-    if (myToken !== renderToken) return;
-
-    const w = canvas.width;
-    const h = canvas.height;
-    const source = captureWebglAt(w, h);
-    if (myToken !== renderToken) return;
-
-    let result;
-    try {
-      // The brushWidthMm / targetPaperSize / targetOrientation feed
-      // canopy's brushThicknessPx calculation, so the preview's canopy
-      // texture matches what the full paint would produce at the chosen
-      // export DPI. We pull these from state so the preview tracks the
-      // PainterParamsPanel + OutputPanel sliders live.
-      const painter = state.get('painter');
-      const exportSpec = state.get('export');
-      result = await renderUnderpainting(source, {
-        bindings: snapshot,
-        brushWidthMm: painter?.brushWidthMm ?? 0.7,
-        targetPaperSize: exportSpec?.format ?? 'A3',
-        targetOrientation: exportSpec?.orientation ?? 'landscape',
-        seed: painter?.seed ?? 0xC0FFEE,
-        softenEdges,
-        // Water painter knobs — same state path PainterParamsPanel writes
-        // to, so sliding the sliders updates the preview live.
-        waterReflectionStrength: painter?.water?.reflectionStrength ?? 0.6,
-        waterSunGlitterEnabled: painter?.water?.sunGlitterEnabled ?? true,
-        waterRippleDensity: painter?.water?.rippleDensity ?? 0.4,
-        // Atmospheric depth knobs (Phase 5 polish) — three painterly
-        // post-passes that run after the median-blur softening. Same
-        // state path PainterParamsPanel writes to, so sliding the
-        // sliders updates the preview live.
-        atmosphericsEnabled: painter?.atmospherics?.enabled !== false,
-        hazeStrength: painter?.atmospherics?.hazeStrength ?? 0.5,
-        bloomStrength: painter?.atmospherics?.bloomStrength ?? 0.4,
-        grainAmount: painter?.atmospherics?.grainAmount ?? 0.15,
-        // medianKernel intentionally falls through to renderUnderpainting's
-        // default (11) so the preview shows the same softening intensity as
-        // a full paint with applyMedianUnderpaint=true.
-      });
-    } catch (err) {
-      if (myToken !== renderToken) return;
-      console.warn('[UnderpaintingPreviewPanel] render failed:', err);
-      stat.textContent = 'error';
-      stat.classList.add('is-error');
-      return;
-    }
-
-    if (myToken !== renderToken) return;
-
-    // Blit the underpainting onto the visible canvas.
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(result.canvas, 0, 0, w, h);
-
-    const wallMs = Math.round(performance.now() - t0);
+    const ms = drawWebglOnto(canvas);
     stat.classList.remove('is-error');
-    const waterTotal = (result.timing.waterGlitterDabCount ?? 0)
-      + (result.timing.waterRippleDabCount ?? 0);
-    stat.textContent = `${wallMs} ms` +
-      (result.timing.canopyDabCount
-        ? ` · ${result.timing.canopyDabCount} dabs`
-        : '') +
-      (waterTotal ? ` · ${waterTotal} h₂o` : '') +
-      (result.timing.landmarkDrawnCount
-        ? ` · ${result.timing.landmarkDrawnCount} mks`
-        : '');
+    stat.textContent = `${ms} ms`;
   }
 
   // Debounced render for high-frequency triggers (camera drag).
@@ -254,8 +176,11 @@ export function createUnderpaintingPreviewPanel(rootEl, opts = {}) {
     subs.push(() => state.off(event, handler));
   }
 
+  // Re-render whenever something the WebGL viewer is reacting to has
+  // changed. `painter:changed` is intentionally NOT subscribed here:
+  // painter sliders affect the export pipeline only, not the 3D viewer,
+  // so they don't change what the preview should show.
   on('viewpoint:changed', renderDebounced);
-  on('painter:changed', renderNow);
   on('terrain:changed', renderNow);
   on('time:changed', renderNow);
   on('location:changed', renderNow);
@@ -267,12 +192,6 @@ export function createUnderpaintingPreviewPanel(rootEl, opts = {}) {
 
   // First render (deferred so the 3D viewer has a chance to draw a frame).
   setTimeout(renderNow, 0);
-
-  // ── Soften toggle ──────────────────────────────────────────────────────
-  softenInput.addEventListener('change', () => {
-    softenEdges = softenInput.checked;
-    renderNow();
-  });
 
   // ── Close button ───────────────────────────────────────────────────────
   // The panel itself doesn't own the show/hide preference — the owner
