@@ -14,6 +14,42 @@
 import { GROUND_COVER_COLOURS, GROUND_COVER_PRIORITY } from '../config.js';
 import { createProjector } from './projection.js';
 
+// Painter category priority — lower number = drawn LATER = on top.
+// Where polygons of different categories overlap geometrically, this
+// breaks the tie before the screen-area-DESC tie-breaker runs.
+//
+// Why this order:
+//   - forest is the most "specific natural cover" signal (a forest patch
+//     inside a residential or farmland area should always read as forest).
+//   - beach / sand is similarly specific (beaches matter visually even
+//     when small).
+//   - urban built environment beats farmland (a village inside a field
+//     should be visible).
+//   - farmland is the residual / default cultivated cover.
+//
+// Within a category, the existing "small details on top of broad fills"
+// rule is preserved by sorting by screen-area DESC (big drawn first,
+// small drawn last). So a small farmland polygon inside a big farmland
+// polygon still wins, and a small forest polygon inside a big forest
+// polygon still wins.
+//
+// Cross-category, the priority promotes the more-specific signal even
+// when it has a larger projected area. This is the regression case
+// the foreground-polygon-projection diagnosis surfaced: a forest
+// polygon overlapping smaller farmland polygons used to be drawn
+// first (bigger area) and shadowed by farmland drawn last; now forest
+// wins regardless.
+//
+// `water` is omitted because waterPainter owns it end-to-end (the
+// `category === 'water'` skip below). Categories not in this map fall
+// back to priority 99 — drawn earliest, easiest to override.
+const CATEGORY_PAINT_PRIORITY = {
+  forest:   1,
+  beach:    2,
+  urban:    3,
+  farmland: 4,
+};
+
 // Sun-phase tint: small RGB shifts applied as a global composite over the
 // freshly-drawn polygons. Magnitudes deliberately gentle so water still reads
 // as water — the painter is meant to *suggest* warmth, not stage a sunset.
@@ -119,8 +155,7 @@ export function paintGround(ctx, projectionCtx, ground, sun) {
   const { canvasWidth: W, canvasHeight: H, groundY } = projectionCtx;
   const projector = createProjector(projectionCtx);
 
-  // Project everything first so we can sort by screen-area (big polygons
-  // drawn first, small last — small details survive on top).
+  // Project everything first so we can sort the polygons before painting.
   // Water polygons are skipped here: waterPainter owns natural=water
   // category end-to-end (base fill + sky-sampling band + glitter + ripples)
   // because flat-blue overpaint would waste the deep-water tone the
@@ -135,10 +170,33 @@ export function paintGround(ctx, projectionCtx, ground, sun) {
     const inners = (f.inners ?? [])
       .map(r => projector.projectRing(r, groundY))
       .filter(r => r);
-    projected.push({ outer, inners, colour, area: ringScreenArea(outer) });
+    projected.push({
+      outer,
+      inners,
+      colour,
+      category: f.category,
+      area: ringScreenArea(outer),
+      paintPriority: CATEGORY_PAINT_PRIORITY[f.category] ?? 99,
+    });
   }
   if (!projected.length) return 0;
-  projected.sort((a, b) => b.area - a.area);
+
+  // Two-key sort:
+  //   1. Lower paint priority drawn LATER (on top). Forest beats farmland
+  //      on overlap regardless of area.
+  //   2. Within priority, larger area drawn first (small details survive
+  //      on top of broad fills) — preserves the existing rule for
+  //      same-category polygon nesting.
+  //
+  // The sort comparator returns positive when `a` should be drawn AFTER
+  // `b`. Higher priority value means drawn earlier (background); lower
+  // priority value means drawn later (foreground).
+  projected.sort((a, b) => {
+    if (a.paintPriority !== b.paintPriority) {
+      return b.paintPriority - a.paintPriority;   // higher number first → drawn earlier
+    }
+    return b.area - a.area;                       // bigger first → drawn earlier
+  });
 
   ctx.save();
   for (const { outer, inners, colour } of projected) {
