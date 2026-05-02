@@ -1,6 +1,7 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { state } from '../state.js';
+import { CameraController } from '../camera/CameraController.js';
 import { DEFAULT_FOV_DEG } from '../config.js';
 
 const CONE_RADIUS_M = 2000;
@@ -181,36 +182,52 @@ export function createMapPicker(container) {
         .on('drag', e => {
           const ll = e.target.getLatLng();
           local.azimuthDeg = bearingFromTo(local.lat, local.lon, ll.lat, ll.lng);
+          // Live-rotate the 3D camera. Cheap (no rebuild), so we drive it
+          // every drag tick. The viewpoint:changed echo from CameraController
+          // hits applyViewpointToMap below but local.azimuthDeg already
+          // matches the event so the diff-guard there is a no-op — no loop.
+          CameraController.lookAt(local.azimuthDeg, state.get('viewpoint.elevation') ?? -5);
+          state.set('viewpoint.azimuth', local.azimuthDeg);
           redrawCone();
           updateReadout();
         });
     }
   }
 
-  function placePin(lat, lon) {
+  function commitLocation() {
+    if (local.lat == null) return;
+    state.set('location', {
+      lat: local.lat,
+      lon: local.lon,
+      displayName: `${local.lat.toFixed(5)}, ${local.lon.toFixed(5)}`,
+    });
+  }
+
+  function placePin(lat, lon, { commit = true } = {}) {
     local.lat = lat;
     local.lon = lon;
-    // User dropped a pin at a *proposed* location — it isn't committed
-    // until they hit "View in 3D" (or LocationPicker search fires
-    // location:changed). Until then, the 3D camera shouldn't pull the
-    // pin back to scene origin.
-    pinReflectsCamera = false;
     if (pinMarker) {
       pinMarker.setLatLng([lat, lon]);
     } else {
       pinMarker = L.marker([lat, lon], { icon: pinIcon, draggable: true })
         .addTo(map)
+        // Throttle the live cone redraw during drag; only commit the
+        // location (which triggers a terrain rebuild) on dragend. While
+        // mid-drag the camera-follower sync is paused so a stray
+        // viewpoint:changed event doesn't fight the user's drag.
+        .on('dragstart', () => { pinReflectsCamera = false; })
         .on('drag', e => {
           const ll = e.target.getLatLng();
           local.lat = ll.lat;
           local.lon = ll.lng;
-          pinReflectsCamera = false;
           redrawCone();
           updateReadout();
-        });
+        })
+        .on('dragend', () => commitLocation());
     }
     redrawCone();
     updateReadout();
+    if (commit) commitLocation();
   }
 
   map.on('click', e => placePin(e.latlng.lat, e.latlng.lng));
@@ -218,20 +235,16 @@ export function createMapPicker(container) {
   fovSlider.addEventListener('input', () => {
     local.fovDeg = parseInt(fovSlider.value, 10);
     fovReadout.textContent = `${local.fovDeg}°`;
+    // Live-zoom the 3D camera. Same diff-guard story as bearing drag —
+    // the echo lands on applyViewpointToMap, finds local.fovDeg already
+    // matches, and short-circuits.
+    CameraController.setFOV(local.fovDeg);
+    state.set('viewpoint.fov', local.fovDeg);
     redrawCone();
     updateReadout();
   });
 
-  viewBtn.addEventListener('click', () => {
-    if (local.lat == null) return;
-    state.set('viewpoint.azimuth', local.azimuthDeg);
-    state.set('viewpoint.fov', local.fovDeg);
-    state.set('location', {
-      lat: local.lat,
-      lon: local.lon,
-      displayName: `${local.lat.toFixed(5)}, ${local.lon.toFixed(5)}`,
-    });
-  });
+  viewBtn.addEventListener('click', commitLocation);
 
   // Tracks the SCENE-ORIGIN lat/lon — the location the user dropped the
   // pin at AND committed via "View in 3D" (or via LocationPicker search).
